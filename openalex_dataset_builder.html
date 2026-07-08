@@ -1,0 +1,2035 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Bibliographic Dataset Builder</title>
+  <style>
+    :root {
+      --ink: #1f2933;
+      --muted: #667085;
+      --line: #d7dde5;
+      --paper: #fbfcfd;
+      --panel: #ffffff;
+      --blue: #2563eb;
+      --green: #16805d;
+      --gold: #b7791f;
+      --red: #bd3b3b;
+      --shadow: 0 12px 32px rgba(18, 25, 38, .08);
+    }
+
+    * { box-sizing: border-box; }
+
+    [hidden] { display: none !important; }
+
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: var(--paper);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.45;
+    }
+
+    button, input, textarea, select { font: inherit; }
+
+    .app {
+      min-height: 100vh;
+      display: grid;
+      grid-template-columns: 304px minmax(0, 1fr);
+    }
+
+    aside {
+      border-right: 1px solid var(--line);
+      background: #f5f8fb;
+      padding: 16px;
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      overflow: auto;
+    }
+
+    main {
+      min-width: 0;
+      padding: 24px;
+    }
+
+    h1, h2, h3, p { margin-top: 0; }
+
+    h1 {
+      font-size: 17px;
+      line-height: 1.2;
+      margin-bottom: 5px;
+      max-width: 220px;
+    }
+
+    h2 {
+      font-size: 16px;
+      margin-bottom: 12px;
+    }
+
+    h3 {
+      font-size: 11px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: .11em;
+      margin-bottom: 9px;
+    }
+
+    .subtle {
+      color: var(--muted);
+      font-size: 13px;
+      margin-bottom: 14px;
+    }
+
+    aside > .subtle {
+      font-size: 12px;
+      line-height: 1.35;
+      margin-bottom: 12px;
+      max-width: 235px;
+    }
+
+    .section {
+      margin-bottom: 12px;
+    }
+
+    aside .section {
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 12px;
+      box-shadow: 0 6px 18px rgba(18, 25, 38, .04);
+    }
+
+    details.section {
+      padding: 0;
+      overflow: hidden;
+    }
+
+    details.section summary {
+      list-style: none;
+      cursor: pointer;
+      padding: 12px;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 760;
+      letter-spacing: .11em;
+      text-transform: uppercase;
+    }
+
+    details.section summary::-webkit-details-marker {
+      display: none;
+    }
+
+    details.section summary::after {
+      content: '+';
+      float: right;
+      color: var(--blue);
+      font-size: 14px;
+      line-height: 1;
+    }
+
+    details.section[open] summary {
+      border-bottom: 1px solid var(--line);
+    }
+
+    details.section[open] summary::after {
+      content: '-';
+    }
+
+    .dropdown-body {
+      padding: 12px;
+    }
+
+    .field {
+      display: grid;
+      gap: 6px;
+      margin-bottom: 11px;
+    }
+
+    label {
+      font-size: 12px;
+      font-weight: 650;
+    }
+
+    input, textarea, select {
+      width: 100%;
+      color: var(--ink);
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      padding: 8px 9px;
+      outline: none;
+      font-size: 13px;
+    }
+
+    textarea {
+      min-height: 132px;
+      resize: vertical;
+      font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+      font-size: 12px;
+    }
+
+    input:focus, textarea:focus, select:focus {
+      border-color: var(--blue);
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, .12);
+    }
+
+    .row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .toggle {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      font-size: 12px;
+      margin: 8px 0;
+    }
+
+    .toggle input {
+      width: 18px;
+      height: 18px;
+      margin: 0;
+    }
+
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    button, .link-button {
+      min-height: 36px;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      background: #fff;
+      color: var(--ink);
+      padding: 8px 11px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      text-decoration: none;
+      font-weight: 650;
+      font-size: 13px;
+    }
+
+    button:hover, .link-button:hover { border-color: #9aa8ba; }
+    button:focus-visible, .link-button:focus-visible {
+      outline: 2px solid rgba(37, 99, 235, .35);
+      outline-offset: 2px;
+    }
+    button:disabled { opacity: .55; cursor: not-allowed; }
+    .primary { background: var(--blue); color: #fff; border-color: var(--blue); }
+    .success { background: var(--green); color: #fff; border-color: var(--green); }
+    .danger { color: var(--red); }
+
+    .fallback-links {
+      gap: 8px;
+      margin-top: 8px;
+    }
+
+    .fallback-links .link-button {
+      min-height: auto;
+      border: 0;
+      background: transparent;
+      color: var(--blue);
+      padding: 0;
+      font-size: 12px;
+      font-weight: 650;
+      text-decoration: underline;
+      text-underline-offset: 3px;
+    }
+
+    .fallback-links .link-button:hover {
+      color: #1d4ed8;
+      border-color: transparent;
+    }
+
+    .tabs {
+      display: flex;
+      gap: 6px;
+      border-bottom: 1px solid var(--line);
+      margin-bottom: 18px;
+      overflow: auto;
+    }
+
+    .app-nav {
+      display: grid;
+      gap: 2px;
+      margin: 12px 0 14px;
+      padding: 4px;
+      background: #e9eef5;
+      border: 1px solid #dde5ee;
+      border-radius: 10px;
+    }
+
+    .app-tab {
+      justify-content: flex-start;
+      min-height: 31px;
+      border-color: transparent;
+      border-left: 3px solid transparent;
+      background: transparent;
+      color: var(--muted);
+      padding: 5px 9px;
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .app-tab.active {
+      background: #fff;
+      border-color: var(--line);
+      border-left-color: var(--blue);
+      color: var(--ink);
+      box-shadow: 0 1px 2px rgba(18, 25, 38, .05);
+    }
+
+    .tab {
+      border: 0;
+      border-bottom: 3px solid transparent;
+      background: transparent;
+      border-radius: 0;
+      min-height: 44px;
+      color: var(--muted);
+      white-space: nowrap;
+    }
+
+    .tab.active {
+      color: var(--ink);
+      border-bottom-color: var(--blue);
+    }
+
+    .panel {
+      display: none;
+    }
+
+    .panel.active {
+      display: block;
+    }
+
+    .app-panel {
+      display: none;
+    }
+
+    .app-panel.active {
+      display: block;
+    }
+
+    .source-controls {
+      display: none;
+    }
+
+    .source-controls.active {
+      display: block;
+    }
+
+    .metrics {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+      margin-bottom: 18px;
+    }
+
+    .capability-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+      margin-top: 14px;
+    }
+
+    .capability-card {
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 16px;
+      min-height: 132px;
+    }
+
+    .capability-card h3 {
+      margin: 0 0 8px;
+      font-size: 15px;
+    }
+
+    .capability-card p {
+      margin: 0;
+    }
+
+    .metric, .card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+    }
+
+    .metric {
+      padding: 14px;
+      min-height: 92px;
+    }
+
+    .metric .value {
+      font-size: 24px;
+      font-weight: 760;
+      margin-bottom: 4px;
+    }
+
+    .metric .label {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .metrics.three {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .card {
+      padding: 16px;
+      margin-bottom: 16px;
+    }
+
+    .urlbox, pre {
+      width: 100%;
+      overflow: auto;
+      background: #111827;
+      color: #d8dee9;
+      border: 1px solid #243040;
+      border-radius: 8px;
+      padding: 14px;
+      font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+      font-size: 12px;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .urlbox {
+      min-height: 70px;
+    }
+
+    .progress {
+      height: 12px;
+      background: #e6ebf1;
+      border-radius: 99px;
+      overflow: hidden;
+      border: 1px solid var(--line);
+    }
+
+    .bar {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, var(--blue), var(--green));
+      transition: width .2s ease;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    th, td {
+      text-align: left;
+      border-bottom: 1px solid var(--line);
+      padding: 10px;
+      font-size: 13px;
+      vertical-align: top;
+    }
+
+    th {
+      background: #eef3f7;
+      font-size: 12px;
+      color: #475467;
+    }
+
+    .status {
+      min-height: 18px;
+      color: var(--muted);
+      font-size: 12px;
+      margin-top: 8px;
+    }
+
+    .warning-list {
+      margin: 0;
+      padding-left: 18px;
+      color: var(--gold);
+      font-size: 13px;
+    }
+
+    .file-input {
+      padding: 9px;
+      border: 1px dashed #9aa8ba;
+      border-radius: 8px;
+      background: #f8fafc;
+      font-size: 12px;
+      line-height: 1.2;
+    }
+
+    .file-input::file-selector-button {
+      min-height: 30px;
+      margin-right: 8px;
+      border: 1px solid #c6d0dd;
+      border-radius: 6px;
+      background: #fff;
+      color: var(--ink);
+      padding: 5px 9px;
+      font: inherit;
+      font-weight: 650;
+      cursor: pointer;
+    }
+
+    .file-input::file-selector-button:hover {
+      border-color: #8ea0b5;
+    }
+
+    .placeholder {
+      min-height: 260px;
+      display: grid;
+      align-content: center;
+      justify-items: start;
+      gap: 10px;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      min-height: 24px;
+      padding: 3px 8px;
+      border-radius: 999px;
+      background: #eaf2ff;
+      color: #1d4ed8;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    @media (max-width: 900px) {
+      .app { grid-template-columns: 1fr; }
+      aside {
+        position: static;
+        height: auto;
+        border-right: 0;
+        border-bottom: 1px solid var(--line);
+      }
+      .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .metrics.three { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .capability-grid { grid-template-columns: 1fr; }
+    }
+
+    @media (max-width: 560px) {
+      main, aside { padding: 16px; }
+      .row, .metrics, .metrics.three, .capability-grid { grid-template-columns: 1fr; }
+      .actions { flex-direction: column; }
+      button, .link-button { width: 100%; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <aside>
+      <h1>Bibliographic Dataset Builder</h1>
+      <p class="subtle">A browser UI for extracting, converting, merging, and exporting publication datasets.</p>
+
+      <div class="app-nav" role="tablist" aria-label="Data source">
+        <button class="app-tab active" data-app-tab="aboutApp" type="button">About</button>
+        <button class="app-tab" data-app-tab="openalexApp" data-controls="openalexControls" type="button">OpenAlex</button>
+        <button class="app-tab" data-app-tab="wosApp" data-controls="wosControls" type="button">Web of Science</button>
+        <button class="app-tab" data-app-tab="scopusApp" data-controls="scopusControls" type="button">Scopus</button>
+        <button class="app-tab" data-app-tab="mergeApp" data-controls="mergeControls" type="button">Merge</button>
+      </div>
+
+      <div class="source-controls" id="openalexControls">
+      <div class="section">
+        <h3>Search</h3>
+        <div class="field">
+          <label for="keywords">Query terms</label>
+          <textarea id="keywords"></textarea>
+        </div>
+        <div class="row">
+          <div class="field">
+            <label for="yearStart">From</label>
+            <input id="yearStart" type="number" min="1900" max="2026" value="1900">
+          </div>
+          <div class="field">
+            <label for="yearEnd">To</label>
+            <input id="yearEnd" type="number" min="1900" max="2026" value="2026">
+          </div>
+        </div>
+      </div>
+
+      <details class="section">
+        <summary>Filters</summary>
+        <div class="dropdown-body">
+          <div class="field">
+            <label for="countries">Country codes</label>
+            <input id="countries" placeholder="JP,US">
+          </div>
+          <div class="field">
+            <label for="institutions">Institution IDs</label>
+            <input id="institutions" placeholder="I123456789">
+          </div>
+          <div class="field">
+            <label for="authors">Author IDs</label>
+            <input id="authors" placeholder="A123456789">
+          </div>
+          <div class="field">
+            <label for="journals">Source IDs</label>
+            <input id="journals" placeholder="S123456789">
+          </div>
+          <div class="field">
+            <label for="advanced">Advanced OpenAlex filter</label>
+            <input id="advanced" placeholder="cited_by_count:>100">
+          </div>
+          <label class="toggle">
+            <input id="removeReviews" type="checkbox">
+            Remove review-like titles
+          </label>
+        </div>
+      </details>
+
+      <div class="section">
+        <h3>Download</h3>
+        <div class="row">
+          <div class="field">
+            <label for="perPage">Page size</label>
+            <input id="perPage" type="number" min="25" max="200" value="200">
+          </div>
+          <div class="field">
+            <label for="maxRecords">Limit</label>
+            <input id="maxRecords" type="number" min="1" placeholder="All">
+          </div>
+        </div>
+        <div class="actions">
+          <button class="primary" id="checkBtn" type="button">Check Count</button>
+          <button class="success" id="downloadBtn" type="button">Download</button>
+        </div>
+        <div class="status" id="status">Ready.</div>
+      </div>
+      </div>
+
+      <div class="source-controls" id="wosControls">
+        <div class="section">
+          <h3>Upload</h3>
+          <div class="field">
+            <label for="wosFiles">Web of Science files</label>
+            <input class="file-input" id="wosFiles" type="file" accept=".txt,.tsv,.csv,text/plain,text/tab-separated-values,text/csv" multiple>
+          </div>
+          <p class="subtle">Select up to 20 savedrecs-style tab-delimited files. Files stay in this browser session.</p>
+          <div class="actions">
+            <button class="primary" id="wosMergeBtn" type="button">Merge Files</button>
+            <button id="wosClearBtn" type="button">Clear</button>
+          </div>
+          <div class="status" id="wosStatus">No files selected.</div>
+        </div>
+      </div>
+
+      <div class="source-controls" id="scopusControls">
+        <div class="section">
+          <h3>Upload</h3>
+          <div class="field">
+            <label for="scopusFiles">Scopus CSV files</label>
+            <input class="file-input" id="scopusFiles" type="file" accept=".csv,text/csv" multiple>
+          </div>
+          <p class="subtle">Select up to 20 Scopus CSV exports. The converter maps Scopus columns into a Web of Science-style tab-delimited database.</p>
+          <div class="actions">
+            <button class="primary" id="scopusConvertBtn" type="button">Convert Files</button>
+            <button id="scopusClearBtn" type="button">Clear</button>
+          </div>
+          <div class="status" id="scopusStatus">No files selected.</div>
+        </div>
+      </div>
+
+      <div class="source-controls" id="mergeControls">
+        <div class="section">
+          <h3>Upload</h3>
+          <div class="field">
+            <label for="mergeFiles">Converted tab-delimited files</label>
+            <input class="file-input" id="mergeFiles" type="file" accept=".txt,.tsv,.csv,text/plain,text/tab-separated-values,text/csv" multiple>
+          </div>
+          <p class="subtle">Select up to 20 WoS-style tab-delimited files produced by OpenAlex, Web of Science, or Scopus sections.</p>
+          <label class="toggle">
+            <input id="mergeRequireArticleDoi" type="checkbox">
+            Keep only articles with DOI
+          </label>
+          <label class="toggle">
+            <input id="mergeScoreTopicFit" type="checkbox">
+            Score topic fit from query terms
+          </label>
+          <div class="actions">
+            <button class="primary" id="mergeRunBtn" type="button">Merge Files</button>
+            <button id="mergeClearBtn" type="button">Clear</button>
+          </div>
+          <div class="status" id="mergeStatus">No files selected.</div>
+        </div>
+      </div>
+    </aside>
+
+    <main>
+      <section class="app-panel active" id="aboutApp">
+        <div class="card">
+          <h2>About This App</h2>
+          <p class="subtle">This mini app helps build a clean bibliographic database from OpenAlex, Web of Science, and Scopus sources. Everything runs in the browser, so uploaded files stay on this computer unless you download or share the exported files yourself.</p>
+          <div class="capability-grid">
+            <div class="capability-card">
+              <h3>OpenAlex Extraction</h3>
+              <p class="subtle">Search OpenAlex, preview retrieved records, remove review-like titles when needed, and export CSV, JSON, or Web of Science-style TSV.</p>
+            </div>
+            <div class="capability-card">
+              <h3>Web of Science Merge</h3>
+              <p class="subtle">Upload up to 20 tab-delimited savedrecs files, combine them into one table, remove duplicates, and download TSV or CSV outputs.</p>
+            </div>
+            <div class="capability-card">
+              <h3>Scopus Conversion</h3>
+              <p class="subtle">Convert Scopus CSV exports into the same Web of Science-style tab-delimited structure used by the rest of the app.</p>
+            </div>
+            <div class="capability-card">
+              <h3>Cross-Source Merge</h3>
+              <p class="subtle">Merge converted tab-delimited outputs from multiple sections, deduplicate across sources, preview results, and export a final database.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>Data Handling</h2>
+          <p class="subtle">File parsing, conversion, merging, deduplication, and downloads happen locally in browser memory. The only network request is the OpenAlex query when you use the OpenAlex extraction tab.</p>
+          <span class="pill">Static HTML app</span>
+          <span class="pill">No backend database</span>
+          <span class="pill">GitHub Pages compatible</span>
+        </div>
+      </section>
+
+      <section class="app-panel" id="openalexApp">
+      <div class="tabs" role="tablist" aria-label="OpenAlex workflow">
+        <button class="tab active" data-oa-tab="dashboard" type="button">Dashboard</button>
+        <button class="tab" data-oa-tab="query" type="button">Query</button>
+        <button class="tab" data-oa-tab="data" type="button">Data</button>
+        <button class="tab" data-oa-tab="code" type="button">Code</button>
+      </div>
+
+      <section class="panel active" id="dashboard">
+        <div class="metrics">
+          <div class="metric"><div class="value" id="countMetric">-</div><div class="label">OpenAlex records</div></div>
+          <div class="metric"><div class="value" id="downloadMetric">0</div><div class="label">Downloaded</div></div>
+          <div class="metric"><div class="value" id="uniqueMetric">0</div><div class="label">Unique records</div></div>
+          <div class="metric"><div class="value" id="reviewMetric">0</div><div class="label">Review-like removed</div></div>
+        </div>
+
+        <div class="card">
+          <h2>Run Progress</h2>
+          <div class="progress"><div class="bar" id="progressBar"></div></div>
+          <div class="status" id="progressText">No download running.</div>
+          <div class="actions">
+            <button id="csvBtn" type="button" disabled>Download CSV</button>
+            <button id="wosBtn" type="button" disabled>Download WoS TSV</button>
+            <button id="jsonBtn" type="button" disabled>Download JSON</button>
+          </div>
+          <div class="status" id="exportStatus"></div>
+          <div class="actions fallback-links" id="exportLinks" hidden>
+            <a class="link-button" id="csvLink" download="openalex_pubs.csv">Fallback CSV</a>
+            <a class="link-button" id="wosLink" download="wos_openalex.txt">Fallback WoS TSV</a>
+            <a class="link-button" id="jsonLink" download="openalex_pubs.json">Fallback JSON</a>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>Workflow</h2>
+          <p class="subtle">The page builds the same OpenAlex works URL, pages through cursor results, converts OpenAlex fields into the selected Web of Science-style columns, optionally removes review-like titles, then exports data.</p>
+          <span class="pill">No API key required</span>
+        </div>
+      </section>
+
+      <section class="panel" id="query">
+        <div class="card">
+          <h2>OpenAlex URL</h2>
+          <div class="urlbox" id="queryUrl"></div>
+          <div class="actions">
+            <button id="copyUrlBtn" type="button">Copy URL</button>
+            <a class="link-button" id="openUrlBtn" target="_blank" rel="noopener">Open JSON</a>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel" id="data">
+        <div class="card">
+          <h2>Preview</h2>
+          <div id="tableWrap">
+            <p class="subtle">Download records to see a preview.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel" id="code">
+        <div class="card">
+          <h2>Generated Python</h2>
+          <div class="actions">
+            <button id="copyCodeBtn" type="button">Copy Code</button>
+            <a class="link-button" href="data_from_openalex_Valery_2026_code.py" download>Notebook Code</a>
+          </div>
+          <pre id="pythonCode"></pre>
+        </div>
+      </section>
+      </section>
+
+      <section class="app-panel" id="wosApp">
+        <div class="metrics">
+          <div class="metric"><div class="value" id="wosFileMetric">0</div><div class="label">Files</div></div>
+          <div class="metric"><div class="value" id="wosTotalMetric">0</div><div class="label">Input rows</div></div>
+          <div class="metric"><div class="value" id="wosUniqueMetric">0</div><div class="label">Unique rows</div></div>
+          <div class="metric"><div class="value" id="wosDuplicateMetric">0</div><div class="label">Duplicates removed</div></div>
+        </div>
+
+        <div class="card">
+          <h2>Merged Database</h2>
+          <div class="actions">
+            <button id="wosDownloadTsvBtn" type="button" disabled>Download WoS TSV</button>
+            <button id="wosDownloadCsvBtn" type="button" disabled>Download CSV</button>
+          </div>
+          <div class="status" id="wosExportStatus"></div>
+          <div class="actions fallback-links" id="wosExportLinks" hidden>
+            <a class="link-button" id="wosMergedTsvLink" download="wos_merged.txt">Fallback WoS TSV</a>
+            <a class="link-button" id="wosMergedCsvLink" download="wos_merged.csv">Fallback CSV</a>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>Preview</h2>
+          <div id="wosTableWrap">
+            <p class="subtle">Upload and merge Web of Science files to see a preview.</p>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>Warnings</h2>
+          <div id="wosWarnings">
+            <p class="subtle">Validation notes will appear here.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="app-panel" id="scopusApp">
+        <div class="metrics">
+          <div class="metric"><div class="value" id="scopusFileMetric">0</div><div class="label">Files</div></div>
+          <div class="metric"><div class="value" id="scopusTotalMetric">0</div><div class="label">Input rows</div></div>
+          <div class="metric"><div class="value" id="scopusUniqueMetric">0</div><div class="label">Unique rows</div></div>
+          <div class="metric"><div class="value" id="scopusDuplicateMetric">0</div><div class="label">Duplicates removed</div></div>
+        </div>
+
+        <div class="card">
+          <h2>WoS-Style Conversion</h2>
+          <p class="subtle">Scopus CSV records are mapped into the selected Web of Science-style tab-delimited fields used elsewhere in this app.</p>
+          <div class="actions">
+            <button id="scopusDownloadTsvBtn" type="button" disabled>Download WoS TSV</button>
+            <button id="scopusDownloadCsvBtn" type="button" disabled>Download CSV</button>
+          </div>
+          <div class="status" id="scopusExportStatus"></div>
+          <div class="actions fallback-links" id="scopusExportLinks" hidden>
+            <a class="link-button" id="scopusTsvLink" download="wos_scopus.txt">Fallback WoS TSV</a>
+            <a class="link-button" id="scopusCsvLink" download="wos_scopus.csv">Fallback CSV</a>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>Preview</h2>
+          <div id="scopusTableWrap">
+            <p class="subtle">Upload and convert Scopus CSV files to see a preview.</p>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>Warnings</h2>
+          <div id="scopusWarnings">
+            <p class="subtle">Validation notes will appear here.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="app-panel" id="mergeApp">
+        <div class="metrics">
+          <div class="metric"><div class="value" id="mergeFileMetric">0</div><div class="label">Files</div></div>
+          <div class="metric"><div class="value" id="mergeTotalMetric">0</div><div class="label">Input rows</div></div>
+          <div class="metric"><div class="value" id="mergeUniqueMetric">0</div><div class="label">Unique rows</div></div>
+          <div class="metric"><div class="value" id="mergeDuplicateMetric">0</div><div class="label">Duplicates removed</div></div>
+        </div>
+        <div class="metrics">
+          <div class="metric"><div class="value" id="mergeOpenAlexMetric">0</div><div class="label">OpenAlex unique</div></div>
+          <div class="metric"><div class="value" id="mergeWosMetric">0</div><div class="label">WoS unique</div></div>
+          <div class="metric"><div class="value" id="mergeScopusMetric">0</div><div class="label">Scopus unique</div></div>
+          <div class="metric"><div class="value" id="mergeCrossDuplicateMetric">0%</div><div class="label">Cross-db duplicates</div></div>
+        </div>
+
+        <div class="card">
+          <h2>Merged Cross-Source Database</h2>
+          <p class="subtle">Merge previously converted WoS-style tab-delimited outputs, add source databases, and deduplicate across sources using UT, DOI, then title/year/author fallback.</p>
+          <div class="actions">
+            <button id="mergeDownloadTsvBtn" type="button" disabled>Download WoS TSV</button>
+            <button id="mergeDownloadCsvBtn" type="button" disabled>Download CSV</button>
+          </div>
+          <div class="status" id="mergeExportStatus"></div>
+          <div class="actions fallback-links" id="mergeExportLinks" hidden>
+            <a class="link-button" id="mergeTsvLink" download="wos_sources.txt">Fallback WoS TSV</a>
+            <a class="link-button" id="mergeCsvLink" download="wos_sources.csv">Fallback CSV</a>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>Preview</h2>
+          <div id="mergeTableWrap">
+            <p class="subtle">Upload and merge converted tab-delimited files to see a preview.</p>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>Warnings</h2>
+          <div id="mergeWarnings">
+            <p class="subtle">Validation notes will appear here.</p>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    const reviewPattern = /review|overview|landscape|survey|state-of-the-art|challenges and|and challenges|recommendations and|and recommendations/i;
+    let downloadedRows = [];
+    let rawPapers = [];
+    let wosMergedRows = [];
+    let wosMergedColumns = [];
+    let scopusConvertedRows = [];
+    let scopusConvertedColumns = [];
+    let mergedRows = [];
+    let mergedColumns = [];
+    const wosCanonicalColumns = ['UT','PY','TI','AB','AU','Z9','C1','DT','DE','ID','CR','DI','SO','WC','RP','J9','VL','BP','LA','IS','EP'];
+    const mergeSourceColumn = 'SOURCE';
+    const topicFitColumn = 'TOPIC_FIT';
+    const mergeOutputColumns = [...wosCanonicalColumns, mergeSourceColumn];
+
+    const fields = {
+      keywords: document.getElementById('keywords'),
+      yearStart: document.getElementById('yearStart'),
+      yearEnd: document.getElementById('yearEnd'),
+      countries: document.getElementById('countries'),
+      institutions: document.getElementById('institutions'),
+      authors: document.getElementById('authors'),
+      journals: document.getElementById('journals'),
+      advanced: document.getElementById('advanced'),
+      removeReviews: document.getElementById('removeReviews'),
+      perPage: document.getElementById('perPage'),
+      maxRecords: document.getElementById('maxRecords')
+    };
+
+    fields.keywords.value = '';
+
+    function listFromInput(value) {
+      return value.split(',').map(item => item.trim()).filter(Boolean);
+    }
+
+    function formatQueryOpenAlex(searchTerms) {
+      return `title_and_abstract.search:${searchTerms}`;
+    }
+
+    function createQueryString() {
+      let fromYear = fields.yearStart.value;
+      let toYear = fields.yearEnd.value;
+      if (Number(toYear) < Number(fromYear)) {
+        toYear = fromYear;
+        fields.yearEnd.value = fromYear;
+      }
+
+      const filters = [];
+      const keywords = fields.keywords.value.trim();
+      const countries = listFromInput(fields.countries.value).map(x => x.toUpperCase());
+      const authors = listFromInput(fields.authors.value);
+      const institutions = listFromInput(fields.institutions.value);
+      const journals = listFromInput(fields.journals.value);
+      const advanced = fields.advanced.value.replace(/\n/g, '').trim();
+
+      if (keywords) filters.push(formatQueryOpenAlex(keywords));
+      if (fromYear) filters.push(`from_publication_date:${fromYear}-01-01`);
+      if (toYear) filters.push(`to_publication_date:${toYear}-12-31`);
+      if (countries.length) filters.push(`institutions.country_code:${countries.join('|')}`);
+      if (authors.length) filters.push(`authorships.author.id:${authors.join('|')}`);
+      if (institutions.length) filters.push(`institutions.id:${institutions.join('|')}`);
+      if (journals.length) filters.push(`locations.source.id:${journals.join('|')}`);
+      if (advanced) filters.push(advanced);
+      filters.push('type:article');
+
+      const selection = 'id,doi,title,publication_year,language,type,primary_location,open_access,authorships,cited_by_count,referenced_works,abstract_inverted_index,concepts,biblio,is_retracted';
+      const params = new URLSearchParams({
+        filter: filters.join(','),
+        sort: 'cited_by_count:desc',
+        select: selection,
+        mailto: 'research@example.com'
+      });
+      return `https://api.openalex.org/works?${params.toString()}`;
+    }
+
+    function formatAbstract(index) {
+      if (!index || typeof index !== 'object') return '';
+      const words = [];
+      Object.entries(index).forEach(([word, positions]) => {
+        (positions || []).forEach(position => words.push([word, position]));
+      });
+      return words.sort((a, b) => a[1] - b[1]).map(item => item[0]).join(' ');
+    }
+
+    function formatConcepts(concepts) {
+      return (concepts || []).filter(c => Number(c.score) >= 0.3).map(c => c.display_name);
+    }
+
+    function countryName(code) {
+      try {
+        return new Intl.DisplayNames(['en'], { type: 'region' }).of(code) || code;
+      } catch {
+        return code;
+      }
+    }
+
+    function formatAuthorship(authorships) {
+      const authors = [];
+      const institutions = new Set();
+      const countries = new Set();
+      (authorships || []).forEach(item => {
+        if (item.author && item.author.display_name) authors.push({ last_name: item.author.display_name });
+        (item.institutions || []).forEach(inst => {
+          if (inst.display_name) institutions.add(inst.display_name);
+          if (inst.country_code) countries.add(countryName(inst.country_code));
+        });
+      });
+      return { authors, institutions: [...institutions], countries: [...countries] };
+    }
+
+    function formatJournal(primaryLocation) {
+      const source = primaryLocation && primaryLocation.source;
+      return source ? { id: source.id || '', title: source.display_name || '' } : { id: '', title: '' };
+    }
+
+    function formatSource(primaryLocation) {
+      return primaryLocation && primaryLocation.source ? primaryLocation.source : {};
+    }
+
+    function findOpenAccess(primaryLocation) {
+      if (!primaryLocation || typeof primaryLocation !== 'object') return {};
+      return { is_oa: Boolean(primaryLocation.is_oa), oa_pdf: primaryLocation.pdf_url || null };
+    }
+
+    function sanitize(paper) {
+      return {
+        authorships: paper.authorships || [],
+        id: paper.id || `missing_oaid_${Math.floor(100000 + Math.random() * 900000)}`,
+        doi: paper.doi || '',
+        type: paper.type || 'unknown',
+        title: paper.title || 'unknown',
+        language: paper.language || '',
+        publication_year: paper.publication_year || 0,
+        cited_by_count: paper.cited_by_count || 0,
+        abstract_inverted_index: paper.abstract_inverted_index || {},
+        concepts: paper.concepts || [],
+        biblio: paper.biblio || {},
+        primary_location: paper.primary_location || {},
+        referenced_works: paper.referenced_works || [],
+        is_retracted: Boolean(paper.is_retracted)
+      };
+    }
+
+    function formatPaper(paper) {
+      const p = sanitize(paper);
+      const authorship = formatAuthorship(p.authorships);
+      return {
+        id: p.id,
+        doi: p.doi,
+        type: p.type.replace('journal-', ''),
+        title: p.title,
+        year: Number(p.publication_year),
+        times_cited: Number(p.cited_by_count),
+        abstract: formatAbstract(p.abstract_inverted_index),
+        concepts: formatConcepts(p.concepts),
+        biblio: p.biblio,
+        'journal.title': formatJournal(p.primary_location),
+        language: p.language,
+        source: formatSource(p.primary_location),
+        raw_authorships: p.authorships,
+        researchers: authorship.authors,
+        research_org_names: authorship.institutions,
+        research_org_country_names: authorship.countries,
+        reference_ids: p.referenced_works,
+        is_oa: findOpenAccess(p.primary_location),
+        is_retracted: p.is_retracted
+      };
+    }
+
+    function uniqueById(rows) {
+      const seen = new Set();
+      return rows.filter(row => {
+        if (seen.has(row.id)) return false;
+        seen.add(row.id);
+        return true;
+      });
+    }
+
+    function csvEscape(value) {
+      const text = typeof value === 'string' ? value : JSON.stringify(value ?? '');
+      return /[",\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+    }
+
+    function toCsv(rows) {
+      const columns = ['id','doi','type','title','year','times_cited','abstract','concepts','journal.title','researchers','research_org_names','research_org_country_names','reference_ids','is_oa','is_retracted'];
+      return [columns.join(','), ...rows.map(row => columns.map(col => csvEscape(row[col])).join(','))].join('\n');
+    }
+
+    function normalizeDoi(doi) {
+      return String(doi || '').replace(/^https?:\/\/doi\.org\//i, '');
+    }
+
+    function initialsName(name) {
+      const parts = String(name || '').trim().split(/\s+/).filter(Boolean);
+      if (!parts.length) return '';
+      const last = parts[parts.length - 1];
+      const initials = parts.slice(0, -1).map(part => part[0]).join('');
+      return initials ? `${last}, ${initials}` : last;
+    }
+
+    function authorNames(row, initials = false) {
+      return (row.raw_authorships || [])
+        .map(item => item.author && item.author.display_name)
+        .filter(Boolean)
+        .map(name => initials ? initialsName(name) : name);
+    }
+
+    function affiliationText(row) {
+      return (row.raw_authorships || []).map(item => {
+        const author = item.author && item.author.display_name ? `[${item.author.display_name}] ` : '';
+        const institutions = (item.institutions || []).map(inst => {
+          const parts = [inst.display_name, inst.country_code ? countryName(inst.country_code) : ''].filter(Boolean);
+          return parts.join(', ');
+        }).filter(Boolean);
+        return institutions.length ? `${author}${institutions.join('; ')}` : '';
+      }).filter(Boolean).join('; ');
+    }
+
+    function sourceIssn(row) {
+      const source = row.source || {};
+      const issn = source.issn || [];
+      if (Array.isArray(issn) && issn.length) return issn[0];
+      return source.issn_l || '';
+    }
+
+    function sourceEissn(row) {
+      const issn = (row.source || {}).issn || [];
+      return Array.isArray(issn) && issn.length > 1 ? issn[1] : '';
+    }
+
+    function tsvCell(value) {
+      if (Array.isArray(value)) return value.join('; ').replace(/\t|\r?\n/g, ' ');
+      if (value && typeof value === 'object') return JSON.stringify(value).replace(/\t|\r?\n/g, ' ');
+      return String(value ?? '').replace(/\t|\r?\n/g, ' ');
+    }
+
+    function toWebOfScienceTsv(rows) {
+      const columns = [...wosCanonicalColumns];
+      const records = rows.map(row => {
+        const journal = row['journal.title'] || {};
+        const concepts = row.concepts || [];
+        const biblio = row.biblio || {};
+        const doi = normalizeDoi(row.doi);
+        const values = {
+          UT: row.id,
+          PY: row.year,
+          TI: row.title,
+          AB: row.abstract,
+          AU: authorNames(row, true).join('; '),
+          Z9: row.times_cited,
+          C1: affiliationText(row),
+          DT: row.type === 'article' ? 'Article' : row.type,
+          DE: concepts.join('; '),
+          ID: concepts.join('; '),
+          CR: (row.reference_ids || []).join('; '),
+          DI: doi,
+          SO: journal.title,
+          WC: concepts.join('; '),
+          RP: (row.reference_ids || []).length,
+          J9: journal.title,
+          VL: biblio.volume || '',
+          BP: biblio.first_page || '',
+          LA: row.language,
+          IS: biblio.issue || '',
+          EP: biblio.last_page || ''
+        };
+        return columns.map(column => tsvCell(values[column])).join('\t');
+      });
+      return [columns.join('\t'), ...records].join('\n');
+    }
+
+    function prepareDownloadLink(linkId, name, type, content, linksId = 'exportLinks') {
+      const blob = new Blob([content], { type });
+      const url = URL.createObjectURL(blob);
+      const link = document.getElementById(linkId);
+      if (link.dataset.url) URL.revokeObjectURL(link.dataset.url);
+      link.href = url;
+      link.dataset.url = url;
+      link.download = name;
+      return link;
+    }
+
+    async function saveTextFile(name, type, content, linkId, statusId = 'exportStatus', linksId = 'exportLinks') {
+      const link = prepareDownloadLink(linkId, name, type, content, linksId);
+      const links = document.getElementById(linksId);
+      links.hidden = true;
+      document.getElementById(statusId).textContent = `Preparing ${name}.`;
+
+      if (window.showSaveFilePicker) {
+        try {
+          const handle = await window.showSaveFilePicker({
+            suggestedName: name,
+            types: [{ description: name, accept: { [type]: [name.slice(name.lastIndexOf('.'))] } }]
+          });
+          const writable = await handle.createWritable();
+          await writable.write(content);
+          await writable.close();
+          document.getElementById(statusId).textContent = `${name} saved.`;
+          links.hidden = true;
+          return;
+        } catch (error) {
+          if (error.name !== 'AbortError') console.warn(error);
+        }
+      }
+
+      document.getElementById(statusId).textContent = `${name} is ready. If the download does not start, use the fallback link below.`;
+      links.hidden = false;
+      link.click();
+    }
+
+    function splitDelimitedLine(line, delimiter = '\t') {
+      const cells = [];
+      let current = '';
+      let quoted = false;
+      for (let i = 0; i < line.length; i++) {
+        const char = line[i];
+        const next = line[i + 1];
+        if (char === '"') {
+          if (quoted && next === '"') {
+            current += '"';
+            i++;
+          } else {
+            quoted = !quoted;
+          }
+        } else if (char === delimiter && !quoted) {
+          cells.push(current);
+          current = '';
+        } else {
+          current += char;
+        }
+      }
+      cells.push(current);
+      return cells;
+    }
+
+    function parseWosText(text, fileName) {
+      const warnings = [];
+      const lines = text.replace(/^\uFEFF/, '').split(/\r?\n/).filter(line => line.trim() !== '');
+      if (!lines.length) return { rows: [], columns: [], warnings: [`${fileName}: file is empty.`] };
+
+      const columns = splitDelimitedLine(lines[0], '\t').map(col => col.trim());
+      if (!columns.includes('UT')) warnings.push(`${fileName}: missing UT column; DOI/title fallback will be used.`);
+      if (!columns.includes('TI')) warnings.push(`${fileName}: missing TI column; preview and fallback dedup may be weaker.`);
+
+      const rows = lines.slice(1).map((line, index) => {
+        const cells = splitDelimitedLine(line, '\t');
+        if (cells.length !== columns.length) {
+          warnings.push(`${fileName}: row ${index + 2} has ${cells.length} cells; expected ${columns.length}.`);
+        }
+        const row = {};
+        columns.forEach((column, colIndex) => {
+          row[column] = cells[colIndex] || '';
+        });
+        return row;
+      });
+
+      return { rows, columns, warnings };
+    }
+
+    function normalizeText(value) {
+      return String(value || '').toLowerCase().replace(/\s+/g, ' ').trim();
+    }
+
+    function normalizeLooseText(value) {
+      return normalizeText(value)
+        .normalize('NFKD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/&/g, ' and ')
+        .replace(/[^a-z0-9]+/g, ' ')
+        .replace(/\b(the|a|an)\b/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+    }
+
+    function normalizeWosDoi(value) {
+      return String(value || '').toLowerCase().replace(/^https?:\/\/(dx\.)?doi\.org\//, '').trim();
+    }
+
+    function firstWosAuthor(value) {
+      return String(value || '').split(/[;,]/)[0].trim();
+    }
+
+    function wosDedupeKey(row) {
+      const ut = normalizeText(row.UT);
+      if (ut) return `ut:${ut}`;
+      const doi = normalizeWosDoi(row.DI || row.DL);
+      if (doi) return `doi:${doi}`;
+      return `fallback:${normalizeText(row.TI)}|${normalizeText(row.PY)}|${normalizeText(firstWosAuthor(row.AU))}`;
+    }
+
+    function mergeDedupeKey(row) {
+      const doi = normalizeWosDoi(row.DI || row.DL);
+      if (doi) return `doi:${doi}`;
+
+      const title = normalizeLooseText(row.TI);
+      const year = normalizeText(row.PY);
+      const author = normalizeLooseText(firstWosAuthor(row.AU));
+      if (title && year) return `title:${title}|${year}|${author}`;
+
+      const ut = normalizeText(row.UT);
+      if (ut) return `ut:${ut}`;
+      return `row:${title}|${year}|${author}`;
+    }
+
+    function mergeWosColumns(columnSets) {
+      return [...wosCanonicalColumns];
+    }
+
+    function normalizeSelectedWosRow(row) {
+      const normalized = {};
+      wosCanonicalColumns.forEach(column => {
+        normalized[column] = column === 'RP' ? (row.NR || row.RP || '') : (row[column] || '');
+      });
+      return normalized;
+    }
+
+    function inferSourceFromFileName(fileName) {
+      const name = String(fileName || '').toLowerCase();
+      if (name.includes('openalex') || name.includes('open_alex') || name.includes('open alex')) return 'OpenAlex';
+      if (name.includes('scopus')) return 'Scopus';
+      if (name.includes('web of science') || name.includes('web-of-science') || name.includes('wos') || name.includes('savedrecs')) return 'Web of Science';
+      return '';
+    }
+
+    function inferSourceFromRow(row, fileSource) {
+      if (row.SOURCE) return row.SOURCE;
+      const ut = String(row.UT || '').trim();
+      if (/openalex\.org/i.test(ut) || /^W\d+$/i.test(ut)) return 'OpenAlex';
+      if (/^2-s2\.0-/i.test(ut)) return 'Scopus';
+      if (/^WOS:/i.test(ut)) return 'Web of Science';
+      return fileSource || 'Unknown';
+    }
+
+    function sourceList(value) {
+      return String(value || '').split(';').map(item => item.trim()).filter(Boolean);
+    }
+
+    function normalizeMergeRow(row) {
+      const normalized = normalizeSelectedWosRow(row);
+      normalized[mergeSourceColumn] = sourceList(row[mergeSourceColumn]).join('; ');
+      return normalized;
+    }
+
+    function dedupeMergeRowsWithSources(rows) {
+      const byKey = new Map();
+      rows.forEach(row => {
+        const key = mergeDedupeKey(row);
+        const sources = sourceList(row[mergeSourceColumn]);
+        if (!byKey.has(key)) {
+          const normalized = normalizeMergeRow(row);
+          normalized[mergeSourceColumn] = sources.join('; ');
+          byKey.set(key, { row: normalized, sources: new Set(sources) });
+          return;
+        }
+        const entry = byKey.get(key);
+        sources.forEach(source => entry.sources.add(source));
+        entry.row[mergeSourceColumn] = Array.from(entry.sources).sort().join('; ');
+      });
+      return Array.from(byKey.values()).map(entry => entry.row);
+    }
+
+    function mergeSourceStats(rows) {
+      const stats = { openalex: 0, wos: 0, scopus: 0, cross: 0, total: rows.length };
+      rows.forEach(row => {
+        const sources = sourceList(row[mergeSourceColumn]);
+        if (sources.includes('OpenAlex')) stats.openalex++;
+        if (sources.includes('Web of Science')) stats.wos++;
+        if (sources.includes('Scopus')) stats.scopus++;
+        if (sources.length > 1) stats.cross++;
+      });
+      return stats;
+    }
+
+    function isArticleWithDoi(row) {
+      const doi = normalizeWosDoi(row.DI || row.DL);
+      const documentType = normalizeLooseText(row.DT);
+      return Boolean(doi) && (documentType === 'article' || documentType.includes('article'));
+    }
+
+    function extractTopicTerms(searchString) {
+      const terms = [];
+      const quoted = String(searchString || '').match(/"([^"]+)"/g) || [];
+      quoted.forEach(item => terms.push(item.replace(/"/g, '')));
+      const withoutQuoted = String(searchString || '').replace(/"[^"]+"/g, ' ');
+      withoutQuoted
+        .split(/\bAND\b|\bOR\b|[(),]/i)
+        .map(item => item.trim())
+        .filter(Boolean)
+        .forEach(item => terms.push(item));
+      const stop = new Set(['and','or','not']);
+      return [...new Set(terms
+        .map(term => normalizeLooseText(term))
+        .filter(term => term && !stop.has(term) && term.length > 1))];
+    }
+
+    function scoreTopicFit(row, searchString) {
+      const terms = extractTopicTerms(searchString);
+      if (!terms.length) return '0%';
+      const haystack = normalizeLooseText([row.TI, row.AB, row.DE, row.ID].filter(Boolean).join(' '));
+      if (!haystack) return '0%';
+      const matched = terms.filter(term => haystack.includes(term)).length;
+      const ratio = matched / terms.length;
+      if (ratio >= 0.75) return '100%';
+      if (ratio >= 0.5) return '75%';
+      if (ratio >= 0.25) return '50%';
+      if (ratio > 0) return '25%';
+      return '0%';
+    }
+
+    function dedupeWosRows(rows) {
+      const seen = new Set();
+      const unique = [];
+      rows.forEach(row => {
+        const key = wosDedupeKey(row);
+        if (!seen.has(key)) {
+          seen.add(key);
+          unique.push(row);
+        }
+      });
+      return unique;
+    }
+
+    function toDelimited(rows, columns, delimiter) {
+      const escapeValue = value => {
+        const text = String(value ?? '').replace(/\r?\n/g, ' ');
+        if (delimiter === ',') return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+        return text.replace(/\t/g, ' ');
+      };
+      return [columns.join(delimiter), ...rows.map(row => columns.map(column => escapeValue(row[column])).join(delimiter))].join('\n');
+    }
+
+    function parseDelimitedRows(text, delimiter = ',') {
+      const rows = [];
+      let row = [];
+      let current = '';
+      let quoted = false;
+      const normalized = text.replace(/^\uFEFF/, '');
+
+      for (let i = 0; i < normalized.length; i++) {
+        const char = normalized[i];
+        const next = normalized[i + 1];
+
+        if (char === '"') {
+          if (quoted && next === '"') {
+            current += '"';
+            i++;
+          } else {
+            quoted = !quoted;
+          }
+        } else if (char === delimiter && !quoted) {
+          row.push(current);
+          current = '';
+        } else if ((char === '\n' || char === '\r') && !quoted) {
+          if (char === '\r' && next === '\n') i++;
+          row.push(current);
+          if (row.some(cell => cell.trim() !== '')) rows.push(row);
+          row = [];
+          current = '';
+        } else {
+          current += char;
+        }
+      }
+
+      row.push(current);
+      if (row.some(cell => cell.trim() !== '')) rows.push(row);
+      return rows;
+    }
+
+    function parseScopusCsv(text, fileName) {
+      const warnings = [];
+      const parsedRows = parseDelimitedRows(text, ',');
+      if (!parsedRows.length) return { rows: [], warnings: [`${fileName}: file is empty.`] };
+
+      const headers = parsedRows[0].map(header => header.trim());
+      ['Title', 'Year', 'Authors', 'EID'].forEach(column => {
+        if (!headers.includes(column)) warnings.push(`${fileName}: missing ${column} column.`);
+      });
+
+      const rows = parsedRows.slice(1).map((cells, index) => {
+        if (cells.length !== headers.length) {
+          warnings.push(`${fileName}: row ${index + 2} has ${cells.length} cells; expected ${headers.length}.`);
+        }
+        const row = {};
+        headers.forEach((header, headerIndex) => {
+          row[header] = cells[headerIndex] || '';
+        });
+        return row;
+      });
+
+      return { rows, warnings };
+    }
+
+    function doiUrl(doi, fallbackLink = '') {
+      const normalized = normalizeWosDoi(doi);
+      return normalized ? `http://dx.doi.org/${normalized}` : fallbackLink;
+    }
+
+    function countScopusReferences(references) {
+      const text = String(references || '').trim();
+      if (!text) return '';
+      return text.split(/;\s+(?=[A-ZÀ-Ž][^,;]{0,80},)/).filter(Boolean).length || '';
+    }
+
+    function convertScopusToWos(row) {
+      const concepts = [row['Author Keywords'], row['Index Keywords']].filter(Boolean).join('; ');
+      const doi = normalizeWosDoi(row.DOI);
+      const converted = {};
+      wosCanonicalColumns.forEach(column => converted[column] = '');
+      Object.assign(converted, {
+        UT: row.EID || '',
+        PY: row.Year || '',
+        TI: row.Title || '',
+        AB: row.Abstract || '',
+        AU: row.Authors || '',
+        Z9: row['Cited by'] || '',
+        C1: row['Authors with affiliations'] || row.Affiliations || '',
+        DT: row['Document Type'] || '',
+        DE: row['Author Keywords'] || '',
+        ID: row['Index Keywords'] || concepts,
+        CR: row.References || '',
+        DI: doi,
+        SO: row['Source title'] || '',
+        WC: '',
+        RP: countScopusReferences(row.References),
+        J9: row['Abbreviated Source Title'] || row['Source title'] || '',
+        VL: row.Volume || '',
+        BP: row['Page start'] || '',
+        LA: row['Language of Original Document'] || '',
+        IS: row.Issue || '',
+        EP: row['Page end'] || ''
+      });
+      return converted;
+    }
+
+    function scopusDedupeKey(row) {
+      const eid = normalizeText(row.EID);
+      if (eid) return `eid:${eid}`;
+      const doi = normalizeWosDoi(row.DOI);
+      if (doi) return `doi:${doi}`;
+      return `fallback:${normalizeText(row.Title)}|${normalizeText(row.Year)}|${normalizeText(firstWosAuthor(row.Authors))}`;
+    }
+
+    function dedupeScopusRows(rows) {
+      const seen = new Set();
+      const unique = [];
+      rows.forEach(row => {
+        const key = scopusDedupeKey(row);
+        if (!seen.has(key)) {
+          seen.add(key);
+          unique.push(row);
+        }
+      });
+      return unique;
+    }
+
+    function renderScopusPreview() {
+      const wrap = document.getElementById('scopusTableWrap');
+      if (!scopusConvertedRows.length) {
+        wrap.innerHTML = '<p class="subtle">Upload and convert Scopus CSV files to see a preview.</p>';
+        return;
+      }
+      const rows = scopusConvertedRows.slice(0, 10);
+      wrap.innerHTML = `<table>
+        <thead><tr><th>Authors</th><th>Title</th><th>Source</th><th>Year</th><th>DOI</th><th>EID</th></tr></thead>
+        <tbody>${rows.map(row => `<tr>
+          <td>${escapeHtml(row.AU || '')}</td>
+          <td>${escapeHtml(row.TI || '')}</td>
+          <td>${escapeHtml(row.SO || '')}</td>
+          <td>${escapeHtml(row.PY || '')}</td>
+          <td>${escapeHtml(row.DI || '')}</td>
+          <td>${escapeHtml(row.UT || '')}</td>
+        </tr>`).join('')}</tbody>
+      </table>`;
+    }
+
+    function renderScopusWarnings(warnings) {
+      const wrap = document.getElementById('scopusWarnings');
+      if (!warnings.length) {
+        wrap.innerHTML = '<p class="subtle">No warnings.</p>';
+        return;
+      }
+      wrap.innerHTML = `<ul class="warning-list">${warnings.slice(0, 20).map(item => `<li>${escapeHtml(item)}</li>`).join('')}</ul>`;
+    }
+
+    function resetScopus() {
+      scopusConvertedRows = [];
+      scopusConvertedColumns = [];
+      document.getElementById('scopusFiles').value = '';
+      document.getElementById('scopusFileMetric').textContent = '0';
+      document.getElementById('scopusTotalMetric').textContent = '0';
+      document.getElementById('scopusUniqueMetric').textContent = '0';
+      document.getElementById('scopusDuplicateMetric').textContent = '0';
+      document.getElementById('scopusDownloadTsvBtn').disabled = true;
+      document.getElementById('scopusDownloadCsvBtn').disabled = true;
+      document.getElementById('scopusExportLinks').hidden = true;
+      document.getElementById('scopusExportStatus').textContent = '';
+      document.getElementById('scopusStatus').textContent = 'No files selected.';
+      renderScopusPreview();
+      renderScopusWarnings([]);
+    }
+
+    async function convertScopusFiles() {
+      const input = document.getElementById('scopusFiles');
+      const files = Array.from(input.files || []);
+      const warnings = [];
+      if (!files.length) {
+        document.getElementById('scopusStatus').textContent = 'Choose at least one Scopus CSV file.';
+        return;
+      }
+      if (files.length > 20) {
+        document.getElementById('scopusStatus').textContent = 'Select 20 files or fewer.';
+        return;
+      }
+
+      document.getElementById('scopusConvertBtn').disabled = true;
+      document.getElementById('scopusStatus').textContent = 'Reading Scopus CSV files.';
+      try {
+        const parsed = [];
+        for (const file of files) {
+          const text = await file.text();
+          parsed.push(parseScopusCsv(text, file.name));
+        }
+
+        warnings.push(...parsed.flatMap(item => item.warnings));
+        const allRows = parsed.flatMap(item => item.rows);
+        const uniqueScopusRows = dedupeScopusRows(allRows);
+        scopusConvertedColumns = mergeWosColumns([]);
+        scopusConvertedRows = uniqueScopusRows.map(convertScopusToWos);
+
+        document.getElementById('scopusFileMetric').textContent = files.length.toLocaleString();
+        document.getElementById('scopusTotalMetric').textContent = allRows.length.toLocaleString();
+        document.getElementById('scopusUniqueMetric').textContent = scopusConvertedRows.length.toLocaleString();
+        document.getElementById('scopusDuplicateMetric').textContent = (allRows.length - scopusConvertedRows.length).toLocaleString();
+        document.getElementById('scopusDownloadTsvBtn').disabled = scopusConvertedRows.length === 0;
+        document.getElementById('scopusDownloadCsvBtn').disabled = scopusConvertedRows.length === 0;
+        document.getElementById('scopusStatus').textContent = 'Conversion complete.';
+        renderScopusPreview();
+        renderScopusWarnings(warnings);
+      } catch (error) {
+        document.getElementById('scopusStatus').textContent = error.message;
+      } finally {
+        document.getElementById('scopusConvertBtn').disabled = false;
+      }
+    }
+
+    function renderWosPreview() {
+      const wrap = document.getElementById('wosTableWrap');
+      if (!wosMergedRows.length) {
+        wrap.innerHTML = '<p class="subtle">Upload and merge Web of Science files to see a preview.</p>';
+        return;
+      }
+      const rows = wosMergedRows.slice(0, 10);
+      wrap.innerHTML = `<table>
+        <thead><tr><th>Authors</th><th>Title</th><th>Source</th><th>Year</th><th>DOI</th><th>UT</th></tr></thead>
+        <tbody>${rows.map(row => `<tr>
+          <td>${escapeHtml(row.AU || '')}</td>
+          <td>${escapeHtml(row.TI || '')}</td>
+          <td>${escapeHtml(row.SO || '')}</td>
+          <td>${escapeHtml(row.PY || '')}</td>
+          <td>${escapeHtml(row.DI || '')}</td>
+          <td>${escapeHtml(row.UT || '')}</td>
+        </tr>`).join('')}</tbody>
+      </table>`;
+    }
+
+    function renderWosWarnings(warnings) {
+      const wrap = document.getElementById('wosWarnings');
+      if (!warnings.length) {
+        wrap.innerHTML = '<p class="subtle">No warnings.</p>';
+        return;
+      }
+      wrap.innerHTML = `<ul class="warning-list">${warnings.slice(0, 20).map(item => `<li>${escapeHtml(item)}</li>`).join('')}</ul>`;
+    }
+
+    function resetWos() {
+      wosMergedRows = [];
+      wosMergedColumns = [];
+      document.getElementById('wosFiles').value = '';
+      document.getElementById('wosFileMetric').textContent = '0';
+      document.getElementById('wosTotalMetric').textContent = '0';
+      document.getElementById('wosUniqueMetric').textContent = '0';
+      document.getElementById('wosDuplicateMetric').textContent = '0';
+      document.getElementById('wosDownloadTsvBtn').disabled = true;
+      document.getElementById('wosDownloadCsvBtn').disabled = true;
+      document.getElementById('wosExportLinks').hidden = true;
+      document.getElementById('wosExportStatus').textContent = '';
+      document.getElementById('wosStatus').textContent = 'No files selected.';
+      renderWosPreview();
+      renderWosWarnings([]);
+    }
+
+    async function mergeWosFiles() {
+      const input = document.getElementById('wosFiles');
+      const files = Array.from(input.files || []);
+      const warnings = [];
+      if (!files.length) {
+        document.getElementById('wosStatus').textContent = 'Choose at least one file.';
+        return;
+      }
+      if (files.length > 20) {
+        document.getElementById('wosStatus').textContent = 'Select 20 files or fewer.';
+        return;
+      }
+
+      document.getElementById('wosMergeBtn').disabled = true;
+      document.getElementById('wosStatus').textContent = 'Reading files.';
+      try {
+        const parsed = [];
+        for (const file of files) {
+          const text = await file.text();
+          parsed.push(parseWosText(text, file.name));
+        }
+
+        warnings.push(...parsed.flatMap(item => item.warnings));
+        const allRows = parsed.flatMap(item => item.rows);
+        wosMergedColumns = mergeWosColumns(parsed.map(item => item.columns));
+        wosMergedRows = dedupeWosRows(allRows).map(normalizeSelectedWosRow);
+
+        const duplicateCount = allRows.length - wosMergedRows.length;
+        document.getElementById('wosFileMetric').textContent = files.length.toLocaleString();
+        document.getElementById('wosTotalMetric').textContent = allRows.length.toLocaleString();
+        document.getElementById('wosUniqueMetric').textContent = wosMergedRows.length.toLocaleString();
+        document.getElementById('wosDuplicateMetric').textContent = duplicateCount.toLocaleString();
+        document.getElementById('wosDownloadTsvBtn').disabled = wosMergedRows.length === 0;
+        document.getElementById('wosDownloadCsvBtn').disabled = wosMergedRows.length === 0;
+        document.getElementById('wosStatus').textContent = 'Merge complete.';
+        renderWosPreview();
+        renderWosWarnings(warnings);
+      } catch (error) {
+        document.getElementById('wosStatus').textContent = error.message;
+      } finally {
+        document.getElementById('wosMergeBtn').disabled = false;
+      }
+    }
+
+    function renderMergePreview() {
+      const wrap = document.getElementById('mergeTableWrap');
+      if (!mergedRows.length) {
+        wrap.innerHTML = '<p class="subtle">Upload and merge converted tab-delimited files to see a preview.</p>';
+        return;
+      }
+      const rows = mergedRows.slice(0, 10);
+      const hasTopicFit = mergedColumns.includes(topicFitColumn);
+      wrap.innerHTML = `<table>
+        <thead><tr><th>Authors</th><th>Title</th><th>Journal</th><th>Year</th><th>DOI</th><th>UT</th><th>Database</th>${hasTopicFit ? '<th>Topic fit</th>' : ''}</tr></thead>
+        <tbody>${rows.map(row => `<tr>
+          <td>${escapeHtml(row.AU || '')}</td>
+          <td>${escapeHtml(row.TI || '')}</td>
+          <td>${escapeHtml(row.SO || '')}</td>
+          <td>${escapeHtml(row.PY || '')}</td>
+          <td>${escapeHtml(row.DI || '')}</td>
+          <td>${escapeHtml(row.UT || '')}</td>
+          <td>${escapeHtml(row.SOURCE || '')}</td>
+          ${hasTopicFit ? `<td>${escapeHtml(row.TOPIC_FIT || '')}</td>` : ''}
+        </tr>`).join('')}</tbody>
+      </table>`;
+    }
+
+    function renderMergeWarnings(warnings) {
+      const wrap = document.getElementById('mergeWarnings');
+      if (!warnings.length) {
+        wrap.innerHTML = '<p class="subtle">No warnings.</p>';
+        return;
+      }
+      wrap.innerHTML = `<ul class="warning-list">${warnings.slice(0, 20).map(item => `<li>${escapeHtml(item)}</li>`).join('')}</ul>`;
+    }
+
+    function resetMerge() {
+      mergedRows = [];
+      mergedColumns = [];
+      document.getElementById('mergeFiles').value = '';
+      document.getElementById('mergeFileMetric').textContent = '0';
+      document.getElementById('mergeTotalMetric').textContent = '0';
+      document.getElementById('mergeUniqueMetric').textContent = '0';
+      document.getElementById('mergeDuplicateMetric').textContent = '0';
+      document.getElementById('mergeOpenAlexMetric').textContent = '0';
+      document.getElementById('mergeWosMetric').textContent = '0';
+      document.getElementById('mergeScopusMetric').textContent = '0';
+      document.getElementById('mergeCrossDuplicateMetric').textContent = '0%';
+      document.getElementById('mergeDownloadTsvBtn').disabled = true;
+      document.getElementById('mergeDownloadCsvBtn').disabled = true;
+      document.getElementById('mergeExportLinks').hidden = true;
+      document.getElementById('mergeExportStatus').textContent = '';
+      document.getElementById('mergeStatus').textContent = 'No files selected.';
+      renderMergePreview();
+      renderMergeWarnings([]);
+    }
+
+    async function mergeConvertedFiles() {
+      const input = document.getElementById('mergeFiles');
+      const files = Array.from(input.files || []);
+      const warnings = [];
+      if (!files.length) {
+        document.getElementById('mergeStatus').textContent = 'Choose at least one converted tab-delimited file.';
+        return;
+      }
+      if (files.length > 20) {
+        document.getElementById('mergeStatus').textContent = 'Select 20 files or fewer.';
+        return;
+      }
+
+      document.getElementById('mergeRunBtn').disabled = true;
+      document.getElementById('mergeStatus').textContent = 'Reading converted files.';
+      try {
+        const parsed = [];
+        for (const file of files) {
+          const text = await file.text();
+          const fileSource = inferSourceFromFileName(file.name);
+          const parsedFile = parseWosText(text, file.name);
+          parsedFile.rows = parsedFile.rows.map(row => ({
+            ...row,
+            [mergeSourceColumn]: inferSourceFromRow(row, fileSource)
+          }));
+          if (parsedFile.rows.some(row => row[mergeSourceColumn] === 'Unknown')) {
+            warnings.push(`${file.name}: source database could not be inferred for some rows.`);
+          }
+          parsed.push(parsedFile);
+        }
+
+        warnings.push(...parsed.flatMap(item => item.warnings));
+        const allRows = parsed.flatMap(item => item.rows);
+        const shouldScoreTopicFit = document.getElementById('mergeScoreTopicFit').checked;
+        mergedColumns = shouldScoreTopicFit ? [...mergeOutputColumns, topicFitColumn] : [...mergeOutputColumns];
+        mergedRows = dedupeMergeRowsWithSources(allRows);
+        const dedupedCount = mergedRows.length;
+        if (document.getElementById('mergeRequireArticleDoi').checked) {
+          mergedRows = mergedRows.filter(isArticleWithDoi);
+        }
+        if (shouldScoreTopicFit) {
+          const searchString = fields.keywords.value.trim();
+          if (!searchString) warnings.push('Topic fit scoring is enabled, but OpenAlex query terms are empty.');
+          mergedRows = mergedRows.map(row => ({
+            ...row,
+            [topicFitColumn]: scoreTopicFit(row, searchString)
+          }));
+        }
+
+        const duplicateCount = allRows.length - dedupedCount;
+        const postFilterRemoved = dedupedCount - mergedRows.length;
+        const sourceStats = mergeSourceStats(mergedRows);
+        const crossPct = sourceStats.total ? Math.round((sourceStats.cross / sourceStats.total) * 1000) / 10 : 0;
+        document.getElementById('mergeFileMetric').textContent = files.length.toLocaleString();
+        document.getElementById('mergeTotalMetric').textContent = allRows.length.toLocaleString();
+        document.getElementById('mergeUniqueMetric').textContent = mergedRows.length.toLocaleString();
+        document.getElementById('mergeDuplicateMetric').textContent = duplicateCount.toLocaleString();
+        document.getElementById('mergeOpenAlexMetric').textContent = sourceStats.openalex.toLocaleString();
+        document.getElementById('mergeWosMetric').textContent = sourceStats.wos.toLocaleString();
+        document.getElementById('mergeScopusMetric').textContent = sourceStats.scopus.toLocaleString();
+        document.getElementById('mergeCrossDuplicateMetric').textContent = `${crossPct}%`;
+        document.getElementById('mergeDownloadTsvBtn').disabled = mergedRows.length === 0;
+        document.getElementById('mergeDownloadCsvBtn').disabled = mergedRows.length === 0;
+        document.getElementById('mergeStatus').textContent = postFilterRemoved
+          ? `Merge complete. Filter removed ${postFilterRemoved.toLocaleString()} non-article or no-DOI rows.`
+          : 'Merge complete.';
+        renderMergePreview();
+        renderMergeWarnings(warnings);
+      } catch (error) {
+        document.getElementById('mergeStatus').textContent = error.message;
+      } finally {
+        document.getElementById('mergeRunBtn').disabled = false;
+      }
+    }
+
+    function setStatus(text) {
+      document.getElementById('status').textContent = text;
+    }
+
+    function updateProgress(done, total) {
+      const pct = total ? Math.min(100, Math.round((done / total) * 100)) : 0;
+      document.getElementById('progressBar').style.width = `${pct}%`;
+      document.getElementById('progressText').textContent = total ? `${done.toLocaleString()} of ${total.toLocaleString()} records downloaded.` : 'Checking query.';
+    }
+
+    function renderPreview() {
+      const wrap = document.getElementById('tableWrap');
+      if (!downloadedRows.length) {
+        wrap.innerHTML = '<p class="subtle">Download records to see a preview.</p>';
+        return;
+      }
+      const rows = downloadedRows.slice(0, 10);
+      wrap.innerHTML = `<table>
+        <thead><tr><th>Title</th><th>Year</th><th>Citations</th><th>Journal</th><th>Countries</th></tr></thead>
+        <tbody>${rows.map(row => `<tr>
+          <td>${escapeHtml(row.title)}</td>
+          <td>${row.year}</td>
+          <td>${row.times_cited}</td>
+          <td>${escapeHtml(row['journal.title'].title || '')}</td>
+          <td>${escapeHtml((row.research_org_country_names || []).join(', '))}</td>
+        </tr>`).join('')}</tbody>
+      </table>`;
+    }
+
+    function escapeHtml(value) {
+      return String(value ?? '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+    }
+
+    function refreshQuery() {
+      const url = createQueryString();
+      document.getElementById('queryUrl').textContent = url;
+      document.getElementById('openUrlBtn').href = url;
+      document.getElementById('pythonCode').textContent = generatedPython(url);
+    }
+
+    function generatedPython(url) {
+      const remove = fields.removeReviews.checked;
+      return `import requests, pandas as pd, time, pickle
+
+formatted_query = ${JSON.stringify(url)}
+records_per_call = ${Number(fields.perPage.value || 200)}
+cursor = '*'
+papers = []
+
+while cursor is not None:
+    loop_query = f'{formatted_query}&per-page={records_per_call}&cursor={cursor}'
+    response = requests.get(loop_query)
+    response.raise_for_status()
+    payload = response.json()
+    print(payload['meta'])
+    papers += payload['results']
+    cursor = payload['meta']['next_cursor']
+    time.sleep(1)
+
+# The HTML app applies the same OpenAlex-to-Dimensions transformation in JavaScript.
+# Full original notebook code is available from the Notebook Code button.
+pubs = pd.json_normalize(papers)
+${remove ? "pubs = pubs[~pubs.title.str.contains('review|overview|landscape|survey|state-of-the-art|challenges and|and challenges|recommendations and|and recommendations', case=False, na=False)].reset_index(drop=True)" : "# Optional review-title filtering is off."}
+pubs.to_csv('openalex_pubs.csv', index=False)
+with open('raw_dataset_pickled_PART7', 'wb') as file:
+    pickle.dump(pubs, file)`;
+    }
+
+    async function checkCount() {
+      refreshQuery();
+      setStatus('Checking OpenAlex count.');
+      const response = await fetch(createQueryString());
+      if (!response.ok) throw new Error(`OpenAlex returned ${response.status}`);
+      const data = await response.json();
+      document.getElementById('countMetric').textContent = Number(data.meta.count || 0).toLocaleString();
+      setStatus('Count ready.');
+      updateProgress(0, Number(data.meta.count || 0));
+      return data.meta.count || 0;
+    }
+
+    async function downloadData() {
+      document.getElementById('downloadBtn').disabled = true;
+      document.getElementById('checkBtn').disabled = true;
+      rawPapers = [];
+      downloadedRows = [];
+      renderPreview();
+      try {
+        const total = await checkCount();
+        const limit = Number(fields.maxRecords.value || total);
+        const perPage = Math.min(200, Math.max(25, Number(fields.perPage.value || 200)));
+        let cursor = '*';
+        let downloaded = 0;
+
+        while (cursor !== null && downloaded < limit) {
+          const pageUrl = `${createQueryString()}&per-page=${perPage}&cursor=${encodeURIComponent(cursor)}`;
+          setStatus(`Downloading page starting at ${downloaded.toLocaleString()} records.`);
+          const response = await fetch(pageUrl);
+          if (!response.ok) throw new Error(`OpenAlex returned ${response.status}`);
+          const payload = await response.json();
+          const remaining = limit - downloaded;
+          const page = (payload.results || []).slice(0, remaining);
+          rawPapers.push(...page);
+          downloaded += page.length;
+          cursor = payload.meta.next_cursor;
+          document.getElementById('downloadMetric').textContent = downloaded.toLocaleString();
+          updateProgress(downloaded, Math.min(total, limit));
+          if (!page.length) break;
+          await new Promise(resolve => setTimeout(resolve, 500));
+        }
+
+        let rows = uniqueById(rawPapers.map(formatPaper));
+        let removed = 0;
+        if (fields.removeReviews.checked) {
+          const before = rows.length;
+          rows = rows.filter(row => !reviewPattern.test(row.title || ''));
+          removed = before - rows.length;
+        }
+        downloadedRows = rows;
+        document.getElementById('uniqueMetric').textContent = rows.length.toLocaleString();
+        document.getElementById('reviewMetric').textContent = removed.toLocaleString();
+        document.getElementById('csvBtn').disabled = rows.length === 0;
+        document.getElementById('wosBtn').disabled = rows.length === 0;
+        document.getElementById('jsonBtn').disabled = rows.length === 0;
+        renderPreview();
+        setStatus('Download complete.');
+      } catch (error) {
+        setStatus(error.message);
+      } finally {
+        document.getElementById('downloadBtn').disabled = false;
+        document.getElementById('checkBtn').disabled = false;
+      }
+    }
+
+    document.querySelectorAll('[data-app-tab]').forEach(tab => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('[data-app-tab]').forEach(item => item.classList.remove('active'));
+        document.querySelectorAll('.app-panel').forEach(item => item.classList.remove('active'));
+        document.querySelectorAll('.source-controls').forEach(item => item.classList.remove('active'));
+        tab.classList.add('active');
+        document.getElementById(tab.dataset.appTab).classList.add('active');
+        if (tab.dataset.controls) document.getElementById(tab.dataset.controls).classList.add('active');
+      });
+    });
+
+    document.querySelectorAll('[data-oa-tab]').forEach(tab => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('[data-oa-tab]').forEach(item => item.classList.remove('active'));
+        document.querySelectorAll('#openalexApp .panel').forEach(item => item.classList.remove('active'));
+        tab.classList.add('active');
+        document.getElementById(tab.dataset.oaTab).classList.add('active');
+      });
+    });
+
+    Object.values(fields).forEach(field => field.addEventListener('input', refreshQuery));
+    fields.removeReviews.addEventListener('change', refreshQuery);
+    document.getElementById('checkBtn').addEventListener('click', () => checkCount().catch(error => setStatus(error.message)));
+    document.getElementById('downloadBtn').addEventListener('click', downloadData);
+    document.getElementById('csvBtn').addEventListener('click', () => saveTextFile('openalex_pubs.csv', 'text/csv', toCsv(downloadedRows), 'csvLink'));
+    document.getElementById('wosBtn').addEventListener('click', () => saveTextFile('wos_openalex.txt', 'text/tab-separated-values', toWebOfScienceTsv(downloadedRows), 'wosLink'));
+    document.getElementById('jsonBtn').addEventListener('click', () => saveTextFile('openalex_pubs.json', 'application/json', JSON.stringify(downloadedRows, null, 2), 'jsonLink'));
+    document.getElementById('wosMergeBtn').addEventListener('click', mergeWosFiles);
+    document.getElementById('wosClearBtn').addEventListener('click', resetWos);
+    document.getElementById('wosDownloadTsvBtn').addEventListener('click', () => saveTextFile('wos_merged.txt', 'text/tab-separated-values', toDelimited(wosMergedRows, wosMergedColumns, '\t'), 'wosMergedTsvLink', 'wosExportStatus', 'wosExportLinks'));
+    document.getElementById('wosDownloadCsvBtn').addEventListener('click', () => saveTextFile('wos_merged.csv', 'text/csv', toDelimited(wosMergedRows, wosMergedColumns, ','), 'wosMergedCsvLink', 'wosExportStatus', 'wosExportLinks'));
+    document.getElementById('scopusConvertBtn').addEventListener('click', convertScopusFiles);
+    document.getElementById('scopusClearBtn').addEventListener('click', resetScopus);
+    document.getElementById('scopusDownloadTsvBtn').addEventListener('click', () => saveTextFile('wos_scopus.txt', 'text/tab-separated-values', toDelimited(scopusConvertedRows, scopusConvertedColumns, '\t'), 'scopusTsvLink', 'scopusExportStatus', 'scopusExportLinks'));
+    document.getElementById('scopusDownloadCsvBtn').addEventListener('click', () => saveTextFile('wos_scopus.csv', 'text/csv', toDelimited(scopusConvertedRows, scopusConvertedColumns, ','), 'scopusCsvLink', 'scopusExportStatus', 'scopusExportLinks'));
+    document.getElementById('mergeRunBtn').addEventListener('click', mergeConvertedFiles);
+    document.getElementById('mergeClearBtn').addEventListener('click', resetMerge);
+    document.getElementById('mergeDownloadTsvBtn').addEventListener('click', () => saveTextFile('wos_sources.txt', 'text/tab-separated-values', toDelimited(mergedRows, mergedColumns, '\t'), 'mergeTsvLink', 'mergeExportStatus', 'mergeExportLinks'));
+    document.getElementById('mergeDownloadCsvBtn').addEventListener('click', () => saveTextFile('wos_sources.csv', 'text/csv', toDelimited(mergedRows, mergedColumns, ','), 'mergeCsvLink', 'mergeExportStatus', 'mergeExportLinks'));
+    document.getElementById('copyUrlBtn').addEventListener('click', () => navigator.clipboard.writeText(createQueryString()));
+    document.getElementById('copyCodeBtn').addEventListener('click', () => navigator.clipboard.writeText(document.getElementById('pythonCode').textContent));
+
+    refreshQuery();
+  </script>
+</body>
+</html>
