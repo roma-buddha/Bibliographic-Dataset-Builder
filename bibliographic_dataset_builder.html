@@ -506,7 +506,8 @@
     }
 
     .selected-files {
-      display: grid;
+      display: flex;
+      flex-wrap: wrap;
       gap: 6px;
       margin-top: 0;
       min-width: 0;
@@ -520,13 +521,12 @@
     }
 
     .selected-file {
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) auto;
-      align-items: center;
-      gap: 8px;
-      padding: 7px 8px;
+      position: relative;
+      max-width: 210px;
+      min-height: 28px;
+      padding: 5px 22px 5px 8px;
       border: 1px solid #d7dee8;
-      border-radius: 8px;
+      border-radius: 7px;
       background: #fff;
       font-size: 12px;
     }
@@ -540,17 +540,26 @@
     }
 
     .selected-file-meta {
-      color: var(--muted);
-      font-weight: 500;
+      display: none;
     }
 
     .remove-file {
-      min-height: 28px;
-      padding: 4px 7px;
-      border-color: #e2e8f0;
-      background: #f8fafc;
+      position: absolute;
+      top: -6px;
+      right: -6px;
+      display: inline-grid;
+      place-items: center;
+      width: 18px;
+      height: 18px;
+      min-height: 18px;
+      padding: 0;
+      border: 1px solid #fecaca;
+      border-radius: 999px;
+      background: #fff;
       color: #b42318;
-      font-size: 12px;
+      font-size: 14px;
+      line-height: 1;
+      font-weight: 800;
     }
 
     .placeholder {
@@ -593,7 +602,7 @@
       button, .link-button { width: 100%; }
       .upload-picker { grid-template-columns: 1fr; }
       .choose-file-button { width: 100%; }
-      .selected-file .remove-file { width: auto; }
+      .selected-file .remove-file { width: 18px; }
     }
   </style>
 </head>
@@ -1058,12 +1067,9 @@
         wrap.innerHTML = '<div class="selected-files-empty">No files selected. Drop files here.</div>';
         return;
       }
-      wrap.innerHTML = files.map((file, index) => `<div class="selected-file">
-        <div>
-          <div class="selected-file-name" title="${escapeHtml(file.name)}">${escapeHtml(file.name)}</div>
-          <div class="selected-file-meta">${escapeHtml(formatFileSize(file.size))}</div>
-        </div>
-        <button class="remove-file" type="button" data-file-kind="${kind}" data-file-index="${index}">Remove</button>
+      wrap.innerHTML = files.map((file, index) => `<div class="selected-file" title="${escapeHtml(file.name)} (${escapeHtml(formatFileSize(file.size))})">
+        <div class="selected-file-name">${escapeHtml(file.name)}</div>
+        <button class="remove-file" type="button" data-file-kind="${kind}" data-file-index="${index}" aria-label="Remove ${escapeHtml(file.name)}">&times;</button>
       </div>`).join('');
     }
 
