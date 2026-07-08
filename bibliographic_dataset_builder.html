@@ -660,7 +660,7 @@
           <h3>Upload</h3>
           <div class="field">
             <label for="wosFiles">Web of Science files</label>
-            <input class="file-input" id="wosFiles" type="file" accept=".txt,.tsv,.csv,text/plain,text/tab-separated-values,text/csv" multiple>
+            <input class="file-input" id="wosFiles" type="file" accept=".txt,.tsv,.csv,text/plain,text/tab-separated-values,text/csv" multiple onchange="addSelectedFiles('wos', this.files)">
           </div>
           <div class="selected-files" id="wosFileList"></div>
           <p class="subtle">Select up to 20 savedrecs-style tab-delimited files. Files stay in this browser session.</p>
@@ -677,7 +677,7 @@
           <h3>Upload</h3>
           <div class="field">
             <label for="scopusFiles">Scopus CSV files</label>
-            <input class="file-input" id="scopusFiles" type="file" accept=".csv,text/csv" multiple>
+            <input class="file-input" id="scopusFiles" type="file" accept=".csv,text/csv" multiple onchange="addSelectedFiles('scopus', this.files)">
           </div>
           <div class="selected-files" id="scopusFileList"></div>
           <p class="subtle">Select up to 20 Scopus CSV exports. The converter maps Scopus columns into a Web of Science-style tab-delimited database.</p>
@@ -694,7 +694,7 @@
           <h3>Upload</h3>
           <div class="field">
             <label for="mergeFiles">Converted tab-delimited files</label>
-            <input class="file-input" id="mergeFiles" type="file" accept=".txt,.tsv,.csv,text/plain,text/tab-separated-values,text/csv" multiple>
+            <input class="file-input" id="mergeFiles" type="file" accept=".txt,.tsv,.csv,text/plain,text/tab-separated-values,text/csv" multiple onchange="addSelectedFiles('merge', this.files)">
           </div>
           <div class="selected-files" id="mergeFileList"></div>
           <p class="subtle">Select up to 20 WoS-style tab-delimited files produced by OpenAlex, Web of Science, or Scopus sections.</p>
@@ -1049,6 +1049,14 @@
       } else {
         setUploadStatus(kind, 'No files selected.');
       }
+    }
+
+    function syncSelectedFilesFromInput(kind) {
+      const input = document.getElementById(`${kind}Files`);
+      if (input?.files?.length && selectedFiles[kind].length === 0) {
+        addSelectedFiles(kind, input.files);
+      }
+      return selectedFiles[kind];
     }
 
     function removeSelectedFile(kind, index) {
@@ -1731,7 +1739,7 @@
     }
 
     async function convertScopusFiles() {
-      const files = selectedFiles.scopus;
+      const files = syncSelectedFilesFromInput('scopus');
       const warnings = [];
       if (!files.length) {
         document.getElementById('scopusStatus').textContent = 'Choose at least one Scopus CSV file.';
@@ -1820,7 +1828,7 @@
     }
 
     async function mergeWosFiles() {
-      const files = selectedFiles.wos;
+      const files = syncSelectedFilesFromInput('wos');
       const warnings = [];
       if (!files.length) {
         document.getElementById('wosStatus').textContent = 'Choose at least one file.';
@@ -1916,7 +1924,7 @@
     }
 
     async function mergeConvertedFiles() {
-      const files = selectedFiles.merge;
+      const files = syncSelectedFilesFromInput('merge');
       const warnings = [];
       if (!files.length) {
         document.getElementById('mergeStatus').textContent = 'Choose at least one converted tab-delimited file.';
