@@ -216,9 +216,12 @@
       text-decoration: none;
       font-weight: 650;
       font-size: 13px;
+      touch-action: manipulation;
+      transition: border-color 160ms ease-out, background-color 160ms ease-out, color 160ms ease-out, transform 120ms ease-out;
     }
 
     button:hover, .link-button:hover { border-color: #9aa8ba; }
+    button:active:not(:disabled), .link-button:active { transform: scale(.98); }
     button:focus-visible, .link-button:focus-visible {
       outline: 2px solid rgba(37, 99, 235, .35);
       outline-offset: 2px;
@@ -423,8 +426,17 @@
       transition: width .2s ease;
     }
 
+    #tableWrap,
+    #wosTableWrap,
+    #scopusTableWrap,
+    #mergeTableWrap {
+      overflow-x: auto;
+      max-width: 100%;
+    }
+
     table {
       width: 100%;
+      min-width: 720px;
       border-collapse: collapse;
       background: #fff;
       border: 1px solid var(--line);
@@ -562,6 +574,13 @@
       font-weight: 800;
     }
 
+    .remove-file::before {
+      content: '';
+      position: absolute;
+      inset: -8px;
+      border-radius: 999px;
+    }
+
     .placeholder {
       min-height: 260px;
       display: grid;
@@ -603,6 +622,15 @@
       .upload-picker { grid-template-columns: 1fr; }
       .choose-file-button { width: 100%; }
       .selected-file .remove-file { width: 18px; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      button, .link-button, .bar {
+        transition: none;
+      }
+      button:active:not(:disabled), .link-button:active {
+        transform: none;
+      }
     }
   </style>
 </head>
@@ -703,7 +731,7 @@
           <div class="field">
             <label for="wosFiles">Web of Science files</label>
             <div class="upload-picker" data-upload-kind="wos">
-              <label class="choose-file-button" for="wosFiles">Choose Files</label>
+              <button class="choose-file-button" type="button" data-file-trigger="wosFiles">Choose Files</button>
               <input class="file-input" id="wosFiles" type="file" accept=".txt,.tsv,.csv,text/plain,text/tab-separated-values,text/csv" multiple onchange="addSelectedFiles('wos', this.files)">
               <div class="selected-files" id="wosFileList"></div>
             </div>
@@ -723,7 +751,7 @@
           <div class="field">
             <label for="scopusFiles">Scopus CSV files</label>
             <div class="upload-picker" data-upload-kind="scopus">
-              <label class="choose-file-button" for="scopusFiles">Choose Files</label>
+              <button class="choose-file-button" type="button" data-file-trigger="scopusFiles">Choose Files</button>
               <input class="file-input" id="scopusFiles" type="file" accept=".csv,text/csv" multiple onchange="addSelectedFiles('scopus', this.files)">
               <div class="selected-files" id="scopusFileList"></div>
             </div>
@@ -743,7 +771,7 @@
           <div class="field">
             <label for="mergeFiles">Converted tab-delimited files</label>
             <div class="upload-picker" data-upload-kind="merge">
-              <label class="choose-file-button" for="mergeFiles">Choose Files</label>
+              <button class="choose-file-button" type="button" data-file-trigger="mergeFiles">Choose Files</button>
               <input class="file-input" id="mergeFiles" type="file" accept=".txt,.tsv,.csv,text/plain,text/tab-separated-values,text/csv" multiple onchange="addSelectedFiles('merge', this.files)">
               <div class="selected-files" id="mergeFileList"></div>
             </div>
@@ -2227,6 +2255,69 @@ with open('raw_dataset_pickled_PART7', 'wb') as file:
       return `${total}s`;
     }
 
+    function setupAccessibility() {
+      document.querySelectorAll('.status').forEach(region => {
+        region.setAttribute('role', 'status');
+        region.setAttribute('aria-live', 'polite');
+      });
+
+      document.querySelectorAll('[data-app-tab]').forEach(tab => {
+        const panelId = tab.dataset.appTab;
+        tab.setAttribute('role', 'tab');
+        tab.setAttribute('aria-controls', panelId);
+        tab.setAttribute('aria-selected', tab.classList.contains('active') ? 'true' : 'false');
+      });
+      document.querySelectorAll('.app-panel').forEach(panel => {
+        panel.setAttribute('role', 'tabpanel');
+        panel.hidden = !panel.classList.contains('active');
+      });
+
+      document.querySelectorAll('[data-oa-tab]').forEach(tab => {
+        const panelId = tab.dataset.oaTab;
+        tab.setAttribute('role', 'tab');
+        tab.setAttribute('aria-controls', panelId);
+        tab.setAttribute('aria-selected', tab.classList.contains('active') ? 'true' : 'false');
+      });
+      document.querySelectorAll('#openalexApp .panel').forEach(panel => {
+        panel.setAttribute('role', 'tabpanel');
+        panel.hidden = !panel.classList.contains('active');
+      });
+    }
+
+    function activateAppTab(tab) {
+      document.querySelectorAll('[data-app-tab]').forEach(item => {
+        item.classList.remove('active');
+        item.setAttribute('aria-selected', 'false');
+      });
+      document.querySelectorAll('.app-panel').forEach(item => {
+        item.classList.remove('active');
+        item.hidden = true;
+      });
+      document.querySelectorAll('.source-controls').forEach(item => item.classList.remove('active'));
+      tab.classList.add('active');
+      tab.setAttribute('aria-selected', 'true');
+      const panel = document.getElementById(tab.dataset.appTab);
+      panel.classList.add('active');
+      panel.hidden = false;
+      if (tab.dataset.controls) document.getElementById(tab.dataset.controls).classList.add('active');
+    }
+
+    function activateOpenAlexTab(tab) {
+      document.querySelectorAll('[data-oa-tab]').forEach(item => {
+        item.classList.remove('active');
+        item.setAttribute('aria-selected', 'false');
+      });
+      document.querySelectorAll('#openalexApp .panel').forEach(item => {
+        item.classList.remove('active');
+        item.hidden = true;
+      });
+      tab.classList.add('active');
+      tab.setAttribute('aria-selected', 'true');
+      const panel = document.getElementById(tab.dataset.oaTab);
+      panel.classList.add('active');
+      panel.hidden = false;
+    }
+
     async function downloadData() {
       document.getElementById('downloadBtn').disabled = true;
       document.getElementById('checkBtn').disabled = true;
@@ -2291,23 +2382,11 @@ with open('raw_dataset_pickled_PART7', 'wb') as file:
     }
 
     document.querySelectorAll('[data-app-tab]').forEach(tab => {
-      tab.addEventListener('click', () => {
-        document.querySelectorAll('[data-app-tab]').forEach(item => item.classList.remove('active'));
-        document.querySelectorAll('.app-panel').forEach(item => item.classList.remove('active'));
-        document.querySelectorAll('.source-controls').forEach(item => item.classList.remove('active'));
-        tab.classList.add('active');
-        document.getElementById(tab.dataset.appTab).classList.add('active');
-        if (tab.dataset.controls) document.getElementById(tab.dataset.controls).classList.add('active');
-      });
+      tab.addEventListener('click', () => activateAppTab(tab));
     });
 
     document.querySelectorAll('[data-oa-tab]').forEach(tab => {
-      tab.addEventListener('click', () => {
-        document.querySelectorAll('[data-oa-tab]').forEach(item => item.classList.remove('active'));
-        document.querySelectorAll('#openalexApp .panel').forEach(item => item.classList.remove('active'));
-        tab.classList.add('active');
-        document.getElementById(tab.dataset.oaTab).classList.add('active');
-      });
+      tab.addEventListener('click', () => activateOpenAlexTab(tab));
     });
 
     Object.values(fields).forEach(field => field.addEventListener('input', refreshQuery));
@@ -2331,6 +2410,9 @@ with open('raw_dataset_pickled_PART7', 'wb') as file:
     document.getElementById('mergeDownloadCsvBtn').addEventListener('click', () => saveTextFile('wos_sources.csv', 'text/csv', toDelimited(mergedRows, mergedColumns, ','), 'mergeCsvLink', 'mergeExportStatus', 'mergeExportLinks'));
     document.getElementById('copyUrlBtn').addEventListener('click', () => navigator.clipboard.writeText(createQueryString()));
     document.getElementById('copyCodeBtn').addEventListener('click', () => navigator.clipboard.writeText(document.getElementById('pythonCode').textContent));
+    document.querySelectorAll('[data-file-trigger]').forEach(button => {
+      button.addEventListener('click', () => document.getElementById(button.dataset.fileTrigger).click());
+    });
     document.getElementById('wosFiles').addEventListener('change', event => addSelectedFiles('wos', event.target.files));
     document.getElementById('scopusFiles').addEventListener('change', event => addSelectedFiles('scopus', event.target.files));
     document.getElementById('mergeFiles').addEventListener('change', event => addSelectedFiles('merge', event.target.files));
@@ -2362,6 +2444,7 @@ with open('raw_dataset_pickled_PART7', 'wb') as file:
     renderSelectedFiles('wos');
     renderSelectedFiles('scopus');
     renderSelectedFiles('merge');
+    setupAccessibility();
     refreshQuery();
   </script>
 </body>
