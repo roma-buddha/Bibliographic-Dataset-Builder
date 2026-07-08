@@ -595,12 +595,16 @@
         <div class="row">
           <div class="field">
             <label for="perPage">Page size</label>
-            <input id="perPage" type="number" min="25" max="200" value="200">
+            <input id="perPage" type="number" min="25" max="100" value="100">
           </div>
           <div class="field">
             <label for="maxRecords">Limit</label>
             <input id="maxRecords" type="number" min="1" placeholder="All">
           </div>
+        </div>
+        <div class="field">
+          <label for="openAlexApiKey">OpenAlex API key optional</label>
+          <input id="openAlexApiKey" type="password" autocomplete="off" placeholder="Use for larger daily OpenAlex downloads">
         </div>
         <div class="actions">
           <button class="primary" id="checkBtn" type="button">Check Count</button>
@@ -917,7 +921,8 @@
       advanced: document.getElementById('advanced'),
       removeReviews: document.getElementById('removeReviews'),
       perPage: document.getElementById('perPage'),
-      maxRecords: document.getElementById('maxRecords')
+      maxRecords: document.getElementById('maxRecords'),
+      openAlexApiKey: document.getElementById('openAlexApiKey')
     };
 
     fields.keywords.value = '';
@@ -945,6 +950,7 @@
       const institutions = listFromInput(fields.institutions.value);
       const journals = listFromInput(fields.journals.value);
       const advanced = fields.advanced.value.replace(/\n/g, '').trim();
+      const apiKey = fields.openAlexApiKey.value.trim();
 
       if (keywords) filters.push(formatQueryOpenAlex(keywords));
       if (fromYear) filters.push(`from_publication_date:${fromYear}-01-01`);
@@ -960,9 +966,9 @@
       const params = new URLSearchParams({
         filter: filters.join(','),
         sort: 'cited_by_count:desc',
-        select: selection,
-        mailto: 'research@example.com'
+        select: selection
       });
+      if (apiKey) params.set('api_key', apiKey);
       return `https://api.openalex.org/works?${params.toString()}`;
     }
 
@@ -1899,12 +1905,12 @@
       return `import requests, pandas as pd, time, pickle
 
 formatted_query = ${JSON.stringify(url)}
-records_per_call = ${Number(fields.perPage.value || 200)}
+records_per_call = ${Number(fields.perPage.value || 100)}
 cursor = '*'
 papers = []
 
 while cursor is not None:
-    loop_query = f'{formatted_query}&per-page={records_per_call}&cursor={cursor}'
+    loop_query = f'{formatted_query}&per_page={records_per_call}&cursor={cursor}'
     response = requests.get(loop_query)
     response.raise_for_status()
     payload = response.json()
@@ -1925,13 +1931,41 @@ with open('raw_dataset_pickled_PART7', 'wb') as file:
     async function checkCount() {
       refreshQuery();
       setStatus('Checking OpenAlex count.');
-      const response = await fetch(createQueryString());
-      if (!response.ok) throw new Error(`OpenAlex returned ${response.status}`);
+      const response = await fetchOpenAlex(createQueryString());
       const data = await response.json();
       document.getElementById('countMetric').textContent = Number(data.meta.count || 0).toLocaleString();
       setStatus('Count ready.');
       updateProgress(0, Number(data.meta.count || 0));
       return data.meta.count || 0;
+    }
+
+    async function fetchOpenAlex(url) {
+      const response = await fetch(url);
+      if (response.ok) return response;
+
+      if (response.status === 429 || response.status === 403) {
+        const retryAfter = Number(response.headers.get('Retry-After') || response.headers.get('X-RateLimit-Reset') || 0);
+        const waitText = retryAfter > 0 ? ` Try again after ${formatDuration(retryAfter)} or add a free OpenAlex API key.` : ' Add a free OpenAlex API key or try again later.';
+        throw new Error(`OpenAlex daily limit reached.${waitText}`);
+      }
+
+      let detail = '';
+      try {
+        const payload = await response.json();
+        detail = payload.message || payload.error || '';
+      } catch {
+        detail = '';
+      }
+      throw new Error(`OpenAlex returned ${response.status}${detail ? `: ${detail}` : ''}`);
+    }
+
+    function formatDuration(seconds) {
+      const total = Math.max(0, Math.round(seconds));
+      const hours = Math.floor(total / 3600);
+      const minutes = Math.floor((total % 3600) / 60);
+      if (hours > 0) return `${hours}h ${minutes}m`;
+      if (minutes > 0) return `${minutes}m`;
+      return `${total}s`;
     }
 
     async function downloadData() {
@@ -1941,18 +1975,25 @@ with open('raw_dataset_pickled_PART7', 'wb') as file:
       downloadedRows = [];
       renderPreview();
       try {
-        const total = await checkCount();
-        const limit = Number(fields.maxRecords.value || total);
-        const perPage = Math.min(200, Math.max(25, Number(fields.perPage.value || 200)));
+        refreshQuery();
+        const perPage = Math.min(100, Math.max(25, Number(fields.perPage.value || 100)));
+        fields.perPage.value = perPage;
+        const requestedLimit = Number(fields.maxRecords.value || 0);
         let cursor = '*';
         let downloaded = 0;
+        let total = null;
+        let limit = requestedLimit || Infinity;
 
         while (cursor !== null && downloaded < limit) {
-          const pageUrl = `${createQueryString()}&per-page=${perPage}&cursor=${encodeURIComponent(cursor)}`;
+          const pageUrl = `${createQueryString()}&per_page=${perPage}&cursor=${encodeURIComponent(cursor)}`;
           setStatus(`Downloading page starting at ${downloaded.toLocaleString()} records.`);
-          const response = await fetch(pageUrl);
-          if (!response.ok) throw new Error(`OpenAlex returned ${response.status}`);
+          const response = await fetchOpenAlex(pageUrl);
           const payload = await response.json();
+          if (total === null) {
+            total = Number(payload.meta.count || 0);
+            limit = requestedLimit || total;
+            document.getElementById('countMetric').textContent = total.toLocaleString();
+          }
           const remaining = limit - downloaded;
           const page = (payload.results || []).slice(0, remaining);
           rawPapers.push(...page);
@@ -1961,7 +2002,7 @@ with open('raw_dataset_pickled_PART7', 'wb') as file:
           document.getElementById('downloadMetric').textContent = downloaded.toLocaleString();
           updateProgress(downloaded, Math.min(total, limit));
           if (!page.length) break;
-          await new Promise(resolve => setTimeout(resolve, 500));
+          await new Promise(resolve => setTimeout(resolve, 750));
         }
 
         let rows = uniqueById(rawPapers.map(formatPaper));
