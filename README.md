@@ -5,8 +5,8 @@ A static browser app for building bibliographic datasets from OpenAlex, Web of S
 ## Files
 
 - `index.html` - main GitHub Pages entry point.
-- `openalex_dataset_builder.html` - named copy of the app.
-- `data_from_openalex_Valery_2026_code.py` - original OpenAlex notebook-style code reference.
+- `bibliographic_dataset_builder.html` - named copy of the app.
+- `openalex_extraction_reference.py` - original OpenAlex notebook-style code reference.
 
 ## Features
 
