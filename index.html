@@ -471,6 +471,12 @@
       padding: 9px;
     }
 
+    .upload-picker.drag-over {
+      border-color: var(--blue);
+      background: #eef5ff;
+      box-shadow: inset 0 0 0 1px rgba(37, 99, 235, 0.22);
+    }
+
     .file-input {
       position: absolute;
       width: 1px;
@@ -683,7 +689,7 @@
           <h3>Upload</h3>
           <div class="field">
             <label for="wosFiles">Web of Science files</label>
-            <div class="upload-picker">
+            <div class="upload-picker" data-upload-kind="wos">
               <label class="choose-file-button" for="wosFiles">Choose Files</label>
               <input class="file-input" id="wosFiles" type="file" accept=".txt,.tsv,.csv,text/plain,text/tab-separated-values,text/csv" multiple onchange="addSelectedFiles('wos', this.files)">
               <div class="selected-files" id="wosFileList"></div>
@@ -703,7 +709,7 @@
           <h3>Upload</h3>
           <div class="field">
             <label for="scopusFiles">Scopus CSV files</label>
-            <div class="upload-picker">
+            <div class="upload-picker" data-upload-kind="scopus">
               <label class="choose-file-button" for="scopusFiles">Choose Files</label>
               <input class="file-input" id="scopusFiles" type="file" accept=".csv,text/csv" multiple onchange="addSelectedFiles('scopus', this.files)">
               <div class="selected-files" id="scopusFileList"></div>
@@ -723,7 +729,7 @@
           <h3>Upload</h3>
           <div class="field">
             <label for="mergeFiles">Converted tab-delimited files</label>
-            <div class="upload-picker">
+            <div class="upload-picker" data-upload-kind="merge">
               <label class="choose-file-button" for="mergeFiles">Choose Files</label>
               <input class="file-input" id="mergeFiles" type="file" accept=".txt,.tsv,.csv,text/plain,text/tab-separated-values,text/csv" multiple onchange="addSelectedFiles('merge', this.files)">
               <div class="selected-files" id="mergeFileList"></div>
@@ -1049,7 +1055,7 @@
       const wrap = document.getElementById(`${kind}FileList`);
       const files = selectedFiles[kind];
       if (!files.length) {
-        wrap.innerHTML = '<div class="selected-files-empty">No files selected</div>';
+        wrap.innerHTML = '<div class="selected-files-empty">No files selected. Drop files here.</div>';
         return;
       }
       wrap.innerHTML = files.map((file, index) => `<div class="selected-file">
@@ -2241,6 +2247,25 @@ with open('raw_dataset_pickled_PART7', 'wb') as file:
     document.getElementById('wosFiles').addEventListener('change', event => addSelectedFiles('wos', event.target.files));
     document.getElementById('scopusFiles').addEventListener('change', event => addSelectedFiles('scopus', event.target.files));
     document.getElementById('mergeFiles').addEventListener('change', event => addSelectedFiles('merge', event.target.files));
+    document.querySelectorAll('[data-upload-kind]').forEach(zone => {
+      ['dragenter', 'dragover'].forEach(type => {
+        zone.addEventListener(type, event => {
+          event.preventDefault();
+          event.stopPropagation();
+          zone.classList.add('drag-over');
+        });
+      });
+      ['dragleave', 'drop'].forEach(type => {
+        zone.addEventListener(type, event => {
+          event.preventDefault();
+          event.stopPropagation();
+          zone.classList.remove('drag-over');
+        });
+      });
+      zone.addEventListener('drop', event => {
+        addSelectedFiles(zone.dataset.uploadKind, event.dataTransfer.files);
+      });
+    });
     document.addEventListener('click', event => {
       const button = event.target.closest('[data-file-kind]');
       if (!button) return;
