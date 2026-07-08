@@ -666,6 +666,10 @@
             <input id="removeReviews" type="checkbox">
             Remove review-like titles
           </label>
+          <label class="toggle">
+            <input id="resolveReferences" type="checkbox">
+            Resolve cited references
+          </label>
         </div>
       </details>
 
@@ -1017,6 +1021,7 @@
       journals: document.getElementById('journals'),
       advanced: document.getElementById('advanced'),
       removeReviews: document.getElementById('removeReviews'),
+      resolveReferences: document.getElementById('resolveReferences'),
       perPage: document.getElementById('perPage'),
       maxRecords: document.getElementById('maxRecords'),
       openAlexApiKey: document.getElementById('openAlexApiKey')
@@ -1146,7 +1151,7 @@
       if (advanced) filters.push(advanced);
       filters.push('type:article');
 
-      const selection = 'id,doi,title,publication_year,language,type,primary_location,open_access,authorships,cited_by_count,referenced_works,abstract_inverted_index,concepts,biblio,is_retracted';
+      const selection = openAlexWorkSelection();
       const params = new URLSearchParams({
         filter: filters.join(','),
         sort: 'cited_by_count:desc',
@@ -1154,6 +1159,14 @@
       });
       if (apiKey) params.set('api_key', apiKey);
       return `https://api.openalex.org/works?${params.toString()}`;
+    }
+
+    function openAlexWorkSelection() {
+      return 'id,doi,title,publication_year,language,type,primary_location,open_access,authorships,cited_by_count,referenced_works,abstract_inverted_index,concepts,biblio,is_retracted';
+    }
+
+    function openAlexReferenceSelection() {
+      return 'id,doi,title,publication_year,authorships,primary_location,biblio';
     }
 
     function formatAbstract(index) {
@@ -1288,6 +1301,68 @@
         .map(name => initials ? initialsName(name) : name);
     }
 
+    function firstReferenceAuthor(work) {
+      const first = (work.authorships || [])[0];
+      const name = first?.author?.display_name || '';
+      if (!name) return '';
+      return initialsName(name).replace(',', '').toUpperCase();
+    }
+
+    function formatCitedReference(work, fallbackId = '') {
+      if (!work || typeof work !== 'object') return fallbackId;
+      const source = work.primary_location?.source || {};
+      const biblio = work.biblio || {};
+      const doi = normalizeDoi(work.doi);
+      const parts = [
+        firstReferenceAuthor(work),
+        work.publication_year || '',
+        source.display_name || '',
+        biblio.volume ? `V${biblio.volume}` : '',
+        biblio.first_page ? `P${biblio.first_page}` : '',
+        doi ? `DOI ${doi}` : '',
+        work.title || ''
+      ].filter(Boolean);
+      return parts.length ? parts.join(', ') : (work.id || fallbackId);
+    }
+
+    function openAlexIdFromUrl(value) {
+      return String(value || '').replace(/^https:\/\/openalex\.org\//i, '');
+    }
+
+    function chunkArray(values, size) {
+      const chunks = [];
+      for (let i = 0; i < values.length; i += size) chunks.push(values.slice(i, i + size));
+      return chunks;
+    }
+
+    async function resolveCitedReferences(rows) {
+      const ids = [...new Set(rows.flatMap(row => row.reference_ids || []).filter(Boolean))];
+      if (!ids.length) return rows;
+
+      const referenceMap = new Map();
+      const chunks = chunkArray(ids, 100);
+      for (let index = 0; index < chunks.length; index += 1) {
+        const chunk = chunks[index];
+        setStatus(`Resolving cited references ${index + 1} of ${chunks.length}.`);
+        const params = new URLSearchParams({
+          filter: `openalex:${chunk.map(openAlexIdFromUrl).join('|')}`,
+          select: openAlexReferenceSelection(),
+          per_page: '100'
+        });
+        const apiKey = fields.openAlexApiKey.value.trim();
+        if (apiKey) params.set('api_key', apiKey);
+        const response = await fetchOpenAlex(`https://api.openalex.org/works?${params.toString()}`);
+        const payload = await response.json();
+        (payload.results || []).forEach(work => referenceMap.set(work.id, work));
+        await new Promise(resolve => setTimeout(resolve, 250));
+      }
+
+      return rows.map(row => ({
+        ...row,
+        references_formatted: (row.reference_ids || []).map(id => formatCitedReference(referenceMap.get(id), id))
+      }));
+    }
+
     function affiliationText(row) {
       return (row.raw_authorships || []).map(item => {
         const author = item.author && item.author.display_name ? `[${item.author.display_name}] ` : '';
@@ -1324,6 +1399,7 @@
         const concepts = row.concepts || [];
         const biblio = row.biblio || {};
         const doi = normalizeDoi(row.doi);
+        const references = row.references_formatted || row.reference_ids || [];
         const values = {
           UT: row.id,
           PY: row.year,
@@ -1335,11 +1411,11 @@
           DT: row.type === 'article' ? 'Article' : row.type,
           DE: concepts.join('; '),
           ID: concepts.join('; '),
-          CR: (row.reference_ids || []).join('; '),
+          CR: references.join('; '),
           DI: doi,
           SO: journal.title,
           WC: concepts.join('; '),
-          RP: (row.reference_ids || []).length,
+          RP: references.length,
           J9: journal.title,
           VL: biblio.volume || '',
           BP: biblio.first_page || '',
@@ -2083,6 +2159,7 @@
 
     function generatedPython(url) {
       const remove = fields.removeReviews.checked;
+      const resolve = fields.resolveReferences.checked;
       return `import requests, pandas as pd, time, pickle
 
 formatted_query = ${JSON.stringify(url)}
@@ -2104,6 +2181,7 @@ while cursor is not None:
 # Full original notebook code is available from the Notebook Code button.
 pubs = pd.json_normalize(papers)
 ${remove ? "pubs = pubs[~pubs.title.str.contains('review|overview|landscape|survey|state-of-the-art|challenges and|and challenges|recommendations and|and recommendations', case=False, na=False)].reset_index(drop=True)" : "# Optional review-title filtering is off."}
+${resolve ? "# Reference resolving is enabled in the HTML app: referenced_works are batch-fetched and formatted into WoS-style CR strings." : "# Reference resolving is off: CR uses OpenAlex referenced_works IDs."}
 pubs.to_csv('openalex_pubs.csv', index=False)
 with open('raw_dataset_pickled_PART7', 'wb') as file:
     pickle.dump(pubs, file)`;
@@ -2192,6 +2270,9 @@ with open('raw_dataset_pickled_PART7', 'wb') as file:
           const before = rows.length;
           rows = rows.filter(row => !reviewPattern.test(row.title || ''));
           removed = before - rows.length;
+        }
+        if (fields.resolveReferences.checked) {
+          rows = await resolveCitedReferences(rows);
         }
         downloadedRows = rows;
         document.getElementById('uniqueMetric').textContent = rows.length.toLocaleString();
