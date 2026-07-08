@@ -486,6 +486,46 @@
       border-color: #8ea0b5;
     }
 
+    .selected-files {
+      display: grid;
+      gap: 6px;
+      margin-top: 10px;
+    }
+
+    .selected-file {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 8px;
+      border: 1px solid #d7dee8;
+      border-radius: 8px;
+      background: #fff;
+      font-size: 12px;
+    }
+
+    .selected-file-name {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      color: var(--ink);
+      font-weight: 650;
+    }
+
+    .selected-file-meta {
+      color: var(--muted);
+      font-weight: 500;
+    }
+
+    .remove-file {
+      min-height: 28px;
+      padding: 4px 7px;
+      border-color: #e2e8f0;
+      background: #f8fafc;
+      color: #b42318;
+      font-size: 12px;
+    }
+
     .placeholder {
       min-height: 260px;
       display: grid;
@@ -524,6 +564,7 @@
       .row, .metrics, .metrics.three, .capability-grid { grid-template-columns: 1fr; }
       .actions { flex-direction: column; }
       button, .link-button { width: 100%; }
+      .selected-file .remove-file { width: auto; }
     }
   </style>
 </head>
@@ -621,6 +662,7 @@
             <label for="wosFiles">Web of Science files</label>
             <input class="file-input" id="wosFiles" type="file" accept=".txt,.tsv,.csv,text/plain,text/tab-separated-values,text/csv" multiple>
           </div>
+          <div class="selected-files" id="wosFileList"></div>
           <p class="subtle">Select up to 20 savedrecs-style tab-delimited files. Files stay in this browser session.</p>
           <div class="actions">
             <button class="primary" id="wosMergeBtn" type="button">Merge Files</button>
@@ -637,6 +679,7 @@
             <label for="scopusFiles">Scopus CSV files</label>
             <input class="file-input" id="scopusFiles" type="file" accept=".csv,text/csv" multiple>
           </div>
+          <div class="selected-files" id="scopusFileList"></div>
           <p class="subtle">Select up to 20 Scopus CSV exports. The converter maps Scopus columns into a Web of Science-style tab-delimited database.</p>
           <div class="actions">
             <button class="primary" id="scopusConvertBtn" type="button">Convert Files</button>
@@ -653,6 +696,7 @@
             <label for="mergeFiles">Converted tab-delimited files</label>
             <input class="file-input" id="mergeFiles" type="file" accept=".txt,.tsv,.csv,text/plain,text/tab-separated-values,text/csv" multiple>
           </div>
+          <div class="selected-files" id="mergeFileList"></div>
           <p class="subtle">Select up to 20 WoS-style tab-delimited files produced by OpenAlex, Web of Science, or Scopus sections.</p>
           <label class="toggle">
             <input id="mergeRequireArticleDoi" type="checkbox">
@@ -905,6 +949,11 @@
     let scopusConvertedColumns = [];
     let mergedRows = [];
     let mergedColumns = [];
+    const selectedFiles = {
+      wos: [],
+      scopus: [],
+      merge: []
+    };
     const wosCanonicalColumns = ['UT','PY','TI','AB','AU','Z9','C1','DT','DE','ID','CR','DI','SO','WC','RP','J9','VL','BP','LA','IS','EP'];
     const mergeSourceColumn = 'SOURCE';
     const topicFitColumn = 'TOPIC_FIT';
@@ -947,6 +996,71 @@
 
     function listFromInput(value) {
       return value.split(',').map(item => item.trim()).filter(Boolean);
+    }
+
+    function fileIdentity(file) {
+      return `${file.name}|${file.size}|${file.lastModified}`;
+    }
+
+    function formatFileSize(bytes) {
+      if (!Number.isFinite(bytes)) return '';
+      if (bytes < 1024) return `${bytes} B`;
+      if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+      return `${Math.round((bytes / (1024 * 1024)) * 10) / 10} MB`;
+    }
+
+    function setUploadStatus(kind, text) {
+      document.getElementById(`${kind}Status`).textContent = text;
+    }
+
+    function renderSelectedFiles(kind) {
+      const wrap = document.getElementById(`${kind}FileList`);
+      const files = selectedFiles[kind];
+      if (!files.length) {
+        wrap.innerHTML = '';
+        return;
+      }
+      wrap.innerHTML = files.map((file, index) => `<div class="selected-file">
+        <div>
+          <div class="selected-file-name" title="${escapeHtml(file.name)}">${escapeHtml(file.name)}</div>
+          <div class="selected-file-meta">${escapeHtml(formatFileSize(file.size))}</div>
+        </div>
+        <button class="remove-file" type="button" data-file-kind="${kind}" data-file-index="${index}">Remove</button>
+      </div>`).join('');
+    }
+
+    function addSelectedFiles(kind, fileList) {
+      const current = selectedFiles[kind];
+      const existing = new Set(current.map(fileIdentity));
+      const additions = Array.from(fileList || []);
+      let added = 0;
+      additions.forEach(file => {
+        const key = fileIdentity(file);
+        if (existing.has(key) || current.length >= 20) return;
+        current.push(file);
+        existing.add(key);
+        added += 1;
+      });
+      document.getElementById(`${kind}Files`).value = '';
+      renderSelectedFiles(kind);
+      if (current.length > 0) {
+        const skipped = additions.length - added;
+        setUploadStatus(kind, `${current.length.toLocaleString()} file${current.length === 1 ? '' : 's'} selected.${skipped > 0 ? ` ${skipped.toLocaleString()} duplicate or over-limit file${skipped === 1 ? '' : 's'} skipped.` : ''}`);
+      } else {
+        setUploadStatus(kind, 'No files selected.');
+      }
+    }
+
+    function removeSelectedFile(kind, index) {
+      selectedFiles[kind].splice(index, 1);
+      renderSelectedFiles(kind);
+      setUploadStatus(kind, selectedFiles[kind].length ? `${selectedFiles[kind].length.toLocaleString()} file${selectedFiles[kind].length === 1 ? '' : 's'} selected.` : 'No files selected.');
+    }
+
+    function clearSelectedFiles(kind) {
+      selectedFiles[kind] = [];
+      document.getElementById(`${kind}Files`).value = '';
+      renderSelectedFiles(kind);
     }
 
     function formatQueryOpenAlex(searchTerms) {
@@ -1602,7 +1716,7 @@
     function resetScopus() {
       scopusConvertedRows = [];
       scopusConvertedColumns = [];
-      document.getElementById('scopusFiles').value = '';
+      clearSelectedFiles('scopus');
       document.getElementById('scopusFileMetric').textContent = '0';
       document.getElementById('scopusTotalMetric').textContent = '0';
       document.getElementById('scopusUniqueMetric').textContent = '0';
@@ -1617,8 +1731,7 @@
     }
 
     async function convertScopusFiles() {
-      const input = document.getElementById('scopusFiles');
-      const files = Array.from(input.files || []);
+      const files = selectedFiles.scopus;
       const warnings = [];
       if (!files.length) {
         document.getElementById('scopusStatus').textContent = 'Choose at least one Scopus CSV file.';
@@ -1692,7 +1805,7 @@
     function resetWos() {
       wosMergedRows = [];
       wosMergedColumns = [];
-      document.getElementById('wosFiles').value = '';
+      clearSelectedFiles('wos');
       document.getElementById('wosFileMetric').textContent = '0';
       document.getElementById('wosTotalMetric').textContent = '0';
       document.getElementById('wosUniqueMetric').textContent = '0';
@@ -1707,8 +1820,7 @@
     }
 
     async function mergeWosFiles() {
-      const input = document.getElementById('wosFiles');
-      const files = Array.from(input.files || []);
+      const files = selectedFiles.wos;
       const warnings = [];
       if (!files.length) {
         document.getElementById('wosStatus').textContent = 'Choose at least one file.';
@@ -1785,7 +1897,7 @@
     function resetMerge() {
       mergedRows = [];
       mergedColumns = [];
-      document.getElementById('mergeFiles').value = '';
+      clearSelectedFiles('merge');
       document.getElementById('mergeFileMetric').textContent = '0';
       document.getElementById('mergeTotalMetric').textContent = '0';
       document.getElementById('mergeUniqueMetric').textContent = '0';
@@ -1804,8 +1916,7 @@
     }
 
     async function mergeConvertedFiles() {
-      const input = document.getElementById('mergeFiles');
-      const files = Array.from(input.files || []);
+      const files = selectedFiles.merge;
       const warnings = [];
       if (!files.length) {
         document.getElementById('mergeStatus').textContent = 'Choose at least one converted tab-delimited file.';
@@ -2087,6 +2198,14 @@ with open('raw_dataset_pickled_PART7', 'wb') as file:
     document.getElementById('mergeDownloadCsvBtn').addEventListener('click', () => saveTextFile('wos_sources.csv', 'text/csv', toDelimited(mergedRows, mergedColumns, ','), 'mergeCsvLink', 'mergeExportStatus', 'mergeExportLinks'));
     document.getElementById('copyUrlBtn').addEventListener('click', () => navigator.clipboard.writeText(createQueryString()));
     document.getElementById('copyCodeBtn').addEventListener('click', () => navigator.clipboard.writeText(document.getElementById('pythonCode').textContent));
+    document.getElementById('wosFiles').addEventListener('change', event => addSelectedFiles('wos', event.target.files));
+    document.getElementById('scopusFiles').addEventListener('change', event => addSelectedFiles('scopus', event.target.files));
+    document.getElementById('mergeFiles').addEventListener('change', event => addSelectedFiles('merge', event.target.files));
+    document.addEventListener('click', event => {
+      const button = event.target.closest('[data-file-kind]');
+      if (!button) return;
+      removeSelectedFile(button.dataset.fileKind, Number(button.dataset.fileIndex));
+    });
 
     refreshQuery();
   </script>
