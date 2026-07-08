@@ -1002,6 +1002,60 @@
         </div>
 
         <div class="card">
+          <h2>Search Strategy Report</h2>
+          <p class="subtle">Export the search settings, uploaded source files, deduplication rules, selected columns, and final counts for reproducibility.</p>
+          <div class="actions">
+            <button id="strategyReportBtn" type="button">Download Report</button>
+          </div>
+          <div class="status" id="strategyReportStatus"></div>
+          <div class="actions fallback-links" id="strategyReportLinks" hidden>
+            <a class="link-button" id="strategyReportLink" download="search_strategy_report.md">Fallback Report</a>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>Flow Summary</h2>
+          <div id="flowSummaryWrap">
+            <p class="subtle">Run the source sections and final merge to populate workflow counts.</p>
+          </div>
+          <div class="actions">
+            <button id="flowSummaryBtn" type="button" disabled>Download Flow Summary</button>
+          </div>
+          <div class="status" id="flowSummaryStatus"></div>
+          <div class="actions fallback-links" id="flowSummaryLinks" hidden>
+            <a class="link-button" id="flowSummaryLink" download="prisma_flow_summary.csv">Fallback Flow Summary</a>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>Deduplication Details</h2>
+          <div id="dedupeDetailsWrap">
+            <p class="subtle">Run final merge to inspect duplicate match reasons.</p>
+          </div>
+          <div class="actions">
+            <button id="dedupeReportBtn" type="button" disabled>Download Duplicate Report</button>
+          </div>
+          <div class="status" id="dedupeReportStatus"></div>
+          <div class="actions fallback-links" id="dedupeReportLinks" hidden>
+            <a class="link-button" id="dedupeReportLink" download="deduplication_report.csv">Fallback Duplicate Report</a>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>Source Overlap Matrix</h2>
+          <div id="sourceOverlapWrap">
+            <p class="subtle">Run final merge to calculate source overlap.</p>
+          </div>
+          <div class="actions">
+            <button id="sourceOverlapBtn" type="button" disabled>Download Source Overlap</button>
+          </div>
+          <div class="status" id="sourceOverlapStatus"></div>
+          <div class="actions fallback-links" id="sourceOverlapLinks" hidden>
+            <a class="link-button" id="sourceOverlapLink" download="source_overlap_matrix.csv">Fallback Source Overlap</a>
+          </div>
+        </div>
+
+        <div class="card">
           <h2>Preview</h2>
           <div id="mergeTableWrap">
             <p class="subtle">Upload and merge converted tab-delimited files to see a preview.</p>
@@ -1028,6 +1082,15 @@
     let scopusConvertedColumns = [];
     let mergedRows = [];
     let mergedColumns = [];
+    const sourceNames = ['OpenAlex', 'Web of Science', 'Scopus'];
+    let workflowStats = {
+      openalex: { downloaded: 0, uniqueRows: 0, reviewRemoved: 0 },
+      wos: { files: 0, inputRows: 0, uniqueRows: 0, duplicatesRemoved: 0 },
+      scopus: { files: 0, inputRows: 0, uniqueRows: 0, duplicatesRemoved: 0 },
+      merge: { files: 0, inputRows: 0, uniqueRows: 0, duplicatesRemoved: 0, postFilterRemoved: 0, finalRows: 0 }
+    };
+    let dedupeDetails = emptyDedupeDetails();
+    let sourceOverlap = emptySourceOverlap();
     const selectedFiles = {
       wos: [],
       scopus: [],
@@ -1076,6 +1139,88 @@
 
     function listFromInput(value) {
       return value.split(',').map(item => item.trim()).filter(Boolean);
+    }
+
+    function emptyDedupeDetails() {
+      return {
+        reasonCounts: { doi: 0, title: 0, ut: 0, row: 0 },
+        groups: [],
+        removed: 0
+      };
+    }
+
+    function emptySourceOverlap() {
+      const matrix = {};
+      sourceNames.forEach(row => {
+        matrix[row] = {};
+        sourceNames.forEach(column => matrix[row][column] = 0);
+      });
+      return {
+        matrix,
+        singles: { OpenAlex: 0, 'Web of Science': 0, Scopus: 0 },
+        pairs: { openalexWos: 0, openalexScopus: 0, wosScopus: 0 },
+        triple: 0,
+        total: 0
+      };
+    }
+
+    function numberText(value) {
+      return Number(value || 0).toLocaleString();
+    }
+
+    function csvLine(values) {
+      return values.map(csvEscape).join(',');
+    }
+
+    function fileNames(kind) {
+      return selectedFiles[kind].map(file => file.name);
+    }
+
+    function sourceSet(row) {
+      return new Set(sourceList(row[mergeSourceColumn]).filter(source => sourceNames.includes(source)));
+    }
+
+    function dedupeReasonFromKey(key) {
+      if (key.startsWith('doi:')) return 'doi';
+      if (key.startsWith('title:')) return 'title';
+      if (key.startsWith('ut:')) return 'ut';
+      return 'row';
+    }
+
+    function dedupeReasonLabel(reason) {
+      return {
+        doi: 'DOI',
+        title: 'Title/year/author',
+        ut: 'UT',
+        row: 'Unresolved row fallback'
+      }[reason] || reason;
+    }
+
+    function calculateSourceOverlap(rows) {
+      const overlap = emptySourceOverlap();
+      overlap.total = rows.length;
+      rows.forEach(row => {
+        const sources = sourceSet(row);
+        sourceNames.forEach(source => {
+          if (sources.has(source)) overlap.matrix[source][source] += 1;
+        });
+        sourceNames.forEach(rowSource => {
+          sourceNames.forEach(columnSource => {
+            if (rowSource !== columnSource && sources.has(rowSource) && sources.has(columnSource)) {
+              overlap.matrix[rowSource][columnSource] += 1;
+            }
+          });
+        });
+        if (sources.size === 1) {
+          const only = Array.from(sources)[0];
+          overlap.singles[only] += 1;
+        }
+        if (sources.has('OpenAlex') && sources.has('Web of Science')) overlap.pairs.openalexWos += 1;
+        if (sources.has('OpenAlex') && sources.has('Scopus')) overlap.pairs.openalexScopus += 1;
+        if (sources.has('Web of Science') && sources.has('Scopus')) overlap.pairs.wosScopus += 1;
+        if (sources.has('OpenAlex') && sources.has('Web of Science') && sources.has('Scopus')) overlap.triple += 1;
+      });
+      return overlap;
     }
 
     function fileIdentity(file) {
@@ -1618,8 +1763,17 @@
       return fileSource || 'Unknown';
     }
 
+    function normalizeSourceName(value) {
+      const source = String(value || '').trim();
+      const lower = source.toLowerCase();
+      if (lower.includes('openalex') || lower.includes('open alex')) return 'OpenAlex';
+      if (lower === 'wos' || lower.includes('web of science')) return 'Web of Science';
+      if (lower.includes('scopus')) return 'Scopus';
+      return source;
+    }
+
     function sourceList(value) {
-      return String(value || '').split(';').map(item => item.trim()).filter(Boolean);
+      return String(value || '').split(';').map(item => normalizeSourceName(item)).filter(Boolean);
     }
 
     function normalizeMergeRow(row) {
@@ -1628,22 +1782,56 @@
       return normalized;
     }
 
-    function dedupeMergeRowsWithSources(rows) {
+    function dedupeMergeRowsWithSourcesDetailed(rows) {
       const byKey = new Map();
+      const details = emptyDedupeDetails();
       rows.forEach(row => {
         const key = mergeDedupeKey(row);
+        const reason = dedupeReasonFromKey(key);
         const sources = sourceList(row[mergeSourceColumn]);
         if (!byKey.has(key)) {
           const normalized = normalizeMergeRow(row);
           normalized[mergeSourceColumn] = sources.join('; ');
-          byKey.set(key, { row: normalized, sources: new Set(sources) });
+          byKey.set(key, {
+            key,
+            reason,
+            row: normalized,
+            sources: new Set(sources),
+            duplicates: []
+          });
           return;
         }
         const entry = byKey.get(key);
         sources.forEach(source => entry.sources.add(source));
         entry.row[mergeSourceColumn] = Array.from(entry.sources).sort().join('; ');
+        entry.duplicates.push({
+          title: row.TI || '',
+          year: row.PY || '',
+          doi: row.DI || row.DL || '',
+          source: sources.join('; '),
+          ut: row.UT || ''
+        });
+        details.reasonCounts[reason] += 1;
+        details.removed += 1;
       });
-      return Array.from(byKey.values()).map(entry => entry.row);
+      details.groups = Array.from(byKey.values())
+        .filter(entry => entry.duplicates.length)
+        .map(entry => ({
+          key: entry.key,
+          reason: entry.reason,
+          keptTitle: entry.row.TI || '',
+          keptYear: entry.row.PY || '',
+          keptDoi: entry.row.DI || '',
+          keptUt: entry.row.UT || '',
+          sources: Array.from(entry.sources).sort().join('; '),
+          duplicateCount: entry.duplicates.length,
+          duplicates: entry.duplicates
+        }));
+      return { rows: Array.from(byKey.values()).map(entry => entry.row), details };
+    }
+
+    function dedupeMergeRowsWithSources(rows) {
+      return dedupeMergeRowsWithSourcesDetailed(rows).rows;
     }
 
     function mergeSourceStats(rows) {
@@ -1656,6 +1844,179 @@
         if (sources.length > 1) stats.cross++;
       });
       return stats;
+    }
+
+    function renderFlowSummary() {
+      const wrap = document.getElementById('flowSummaryWrap');
+      if (!workflowStats.merge.inputRows) {
+        wrap.innerHTML = '<p class="subtle">Run final merge to populate workflow counts.</p>';
+        return;
+      }
+      const rows = [
+        ['OpenAlex records', workflowStats.openalex.downloaded],
+        ['OpenAlex unique records', workflowStats.openalex.uniqueRows],
+        ['WoS input rows', workflowStats.wos.inputRows],
+        ['WoS unique rows', workflowStats.wos.uniqueRows],
+        ['Scopus input rows', workflowStats.scopus.inputRows],
+        ['Scopus unique rows', workflowStats.scopus.uniqueRows],
+        ['Final merge input rows', workflowStats.merge.inputRows],
+        ['Final duplicates removed', workflowStats.merge.duplicatesRemoved],
+        ['Rows removed by DOI/article filter', workflowStats.merge.postFilterRemoved],
+        ['Final included rows', workflowStats.merge.finalRows]
+      ];
+      wrap.innerHTML = `<table>
+        <thead><tr><th>Step</th><th>Count</th></tr></thead>
+        <tbody>${rows.map(row => `<tr><td>${escapeHtml(row[0])}</td><td>${numberText(row[1])}</td></tr>`).join('')}</tbody>
+      </table>`;
+    }
+
+    function renderDedupeDetails() {
+      const wrap = document.getElementById('dedupeDetailsWrap');
+      if (!workflowStats.merge.inputRows) {
+        wrap.innerHTML = '<p class="subtle">Run final merge to inspect duplicate match reasons.</p>';
+        return;
+      }
+      if (!dedupeDetails.removed) {
+        wrap.innerHTML = '<p class="subtle">No duplicates were removed in the latest final merge.</p>';
+        return;
+      }
+      const reasonRows = Object.entries(dedupeDetails.reasonCounts)
+        .map(([reason, count]) => `<tr><td>${escapeHtml(dedupeReasonLabel(reason))}</td><td>${numberText(count)}</td></tr>`)
+        .join('');
+      const groupRows = dedupeDetails.groups.slice(0, 10).map(group => `<tr>
+        <td>${escapeHtml(group.keptTitle)}</td>
+        <td>${escapeHtml(group.sources)}</td>
+        <td>${escapeHtml(dedupeReasonLabel(group.reason))}</td>
+        <td>${escapeHtml(group.keptDoi)}</td>
+        <td>${escapeHtml(group.keptYear)}</td>
+      </tr>`).join('');
+      wrap.innerHTML = `<p class="subtle">${numberText(dedupeDetails.groups.length)} duplicate groups; ${numberText(dedupeDetails.removed)} records removed.</p>
+      <table>
+        <thead><tr><th>Reason</th><th>Removed records</th></tr></thead>
+        <tbody>${reasonRows}</tbody>
+      </table>
+      <table>
+        <thead><tr><th>Kept title</th><th>Sources</th><th>Match reason</th><th>DOI</th><th>Year</th></tr></thead>
+        <tbody>${groupRows}</tbody>
+      </table>`;
+    }
+
+    function renderSourceOverlap() {
+      const wrap = document.getElementById('sourceOverlapWrap');
+      if (!sourceOverlap.total) {
+        wrap.innerHTML = '<p class="subtle">Run final merge to calculate source overlap.</p>';
+        return;
+      }
+      wrap.innerHTML = `<p class="subtle">Single-source only: OpenAlex ${numberText(sourceOverlap.singles.OpenAlex)}, WoS ${numberText(sourceOverlap.singles['Web of Science'])}, Scopus ${numberText(sourceOverlap.singles.Scopus)}. Three-way overlap: ${numberText(sourceOverlap.triple)}.</p>
+      <table>
+        <thead><tr><th>Source</th>${sourceNames.map(source => `<th>${escapeHtml(source)}</th>`).join('')}</tr></thead>
+        <tbody>${sourceNames.map(rowSource => `<tr>
+          <th>${escapeHtml(rowSource)}</th>
+          ${sourceNames.map(columnSource => `<td>${numberText(sourceOverlap.matrix[rowSource][columnSource])}</td>`).join('')}
+        </tr>`).join('')}</tbody>
+      </table>`;
+    }
+
+    function updateReportButtons() {
+      const hasMerge = workflowStats.merge.inputRows > 0;
+      document.getElementById('flowSummaryBtn').disabled = !hasMerge;
+      document.getElementById('dedupeReportBtn').disabled = !hasMerge;
+      document.getElementById('sourceOverlapBtn').disabled = !hasMerge;
+    }
+
+    function renderReportingCards() {
+      renderFlowSummary();
+      renderDedupeDetails();
+      renderSourceOverlap();
+      updateReportButtons();
+    }
+
+    function buildSearchStrategyReport() {
+      const lines = [
+        '# Bibliographic Dataset Search Strategy Report',
+        '',
+        `Exported: ${new Date().toISOString()}`,
+        '',
+        '## OpenAlex Settings',
+        `- Query terms: ${fields.keywords.value.trim() || '(blank)'}`,
+        `- Year range: ${fields.yearStart.value || '(none)'} to ${fields.yearEnd.value || '(none)'}`,
+        `- Country codes: ${fields.countries.value.trim() || '(none)'}`,
+        `- Institution IDs: ${fields.institutions.value.trim() || '(none)'}`,
+        `- Author IDs: ${fields.authors.value.trim() || '(none)'}`,
+        `- Source IDs: ${fields.journals.value.trim() || '(none)'}`,
+        `- Advanced filter: ${fields.advanced.value.trim() || '(none)'}`,
+        `- Page size: ${fields.perPage.value || '(default)'}`,
+        `- Limit: ${fields.maxRecords.value || 'All'}`,
+        `- Remove review-like titles: ${fields.removeReviews.checked ? 'Yes' : 'No'}`,
+        `- Resolve cited references: ${fields.resolveReferences.checked ? 'Yes' : 'No'}`,
+        '',
+        '## Uploaded Files',
+        `- Web of Science files: ${fileNames('wos').join('; ') || '(none)'}`,
+        `- Scopus files: ${fileNames('scopus').join('; ') || '(none)'}`,
+        `- Final merge files: ${fileNames('merge').join('; ') || '(none)'}`,
+        '',
+        '## Deduplication Rules',
+        '- Final merge deduplicates by DOI first, then normalized title/year/first-author, then UT fallback.',
+        '- First occurrence is preserved; later duplicate source databases are appended to SOURCE.',
+        '',
+        '## Preserved Columns',
+        (mergedColumns.length ? mergedColumns : mergeOutputColumns).join(', '),
+        '',
+        '## Final Counts',
+        `- OpenAlex downloaded: ${workflowStats.openalex.downloaded}`,
+        `- OpenAlex unique: ${workflowStats.openalex.uniqueRows}`,
+        `- WoS input rows: ${workflowStats.wos.inputRows}`,
+        `- WoS unique rows: ${workflowStats.wos.uniqueRows}`,
+        `- Scopus input rows: ${workflowStats.scopus.inputRows}`,
+        `- Scopus unique rows: ${workflowStats.scopus.uniqueRows}`,
+        `- Final merge input rows: ${workflowStats.merge.inputRows}`,
+        `- Final duplicates removed: ${workflowStats.merge.duplicatesRemoved}`,
+        `- Rows removed by DOI/article filter: ${workflowStats.merge.postFilterRemoved}`,
+        `- Final included rows: ${workflowStats.merge.finalRows}`
+      ];
+      return lines.join('\n');
+    }
+
+    function buildPrismaFlowCsv() {
+      const rows = [
+        ['step', 'count'],
+        ['openalex_records', workflowStats.openalex.downloaded],
+        ['openalex_unique_records', workflowStats.openalex.uniqueRows],
+        ['wos_input_rows', workflowStats.wos.inputRows],
+        ['wos_unique_rows', workflowStats.wos.uniqueRows],
+        ['scopus_input_rows', workflowStats.scopus.inputRows],
+        ['scopus_unique_rows', workflowStats.scopus.uniqueRows],
+        ['final_merge_input_rows', workflowStats.merge.inputRows],
+        ['final_duplicates_removed', workflowStats.merge.duplicatesRemoved],
+        ['doi_article_filter_removed', workflowStats.merge.postFilterRemoved],
+        ['final_included_rows', workflowStats.merge.finalRows]
+      ];
+      return rows.map(csvLine).join('\n');
+    }
+
+    function buildDeduplicationCsv() {
+      const rows = [['kept_title', 'sources', 'match_reason', 'doi', 'year', 'duplicate_count']];
+      dedupeDetails.groups.forEach(group => {
+        rows.push([group.keptTitle, group.sources, dedupeReasonLabel(group.reason), group.keptDoi, group.keptYear, group.duplicateCount]);
+      });
+      return rows.map(csvLine).join('\n');
+    }
+
+    function buildSourceOverlapCsv() {
+      const rows = [['source', ...sourceNames]];
+      sourceNames.forEach(rowSource => {
+        rows.push([rowSource, ...sourceNames.map(columnSource => sourceOverlap.matrix[rowSource][columnSource])]);
+      });
+      rows.push([]);
+      rows.push(['summary', 'count']);
+      rows.push(['openalex_only', sourceOverlap.singles.OpenAlex]);
+      rows.push(['wos_only', sourceOverlap.singles['Web of Science']]);
+      rows.push(['scopus_only', sourceOverlap.singles.Scopus]);
+      rows.push(['openalex_wos_overlap', sourceOverlap.pairs.openalexWos]);
+      rows.push(['openalex_scopus_overlap', sourceOverlap.pairs.openalexScopus]);
+      rows.push(['wos_scopus_overlap', sourceOverlap.pairs.wosScopus]);
+      rows.push(['three_way_overlap', sourceOverlap.triple]);
+      return rows.map(csvLine).join('\n');
     }
 
     function isArticleWithDoi(row) {
@@ -1872,6 +2233,7 @@
     function resetScopus() {
       scopusConvertedRows = [];
       scopusConvertedColumns = [];
+      workflowStats.scopus = { files: 0, inputRows: 0, uniqueRows: 0, duplicatesRemoved: 0 };
       clearSelectedFiles('scopus');
       document.getElementById('scopusFileMetric').textContent = '0';
       document.getElementById('scopusTotalMetric').textContent = '0';
@@ -1917,11 +2279,18 @@
         document.getElementById('scopusTotalMetric').textContent = allRows.length.toLocaleString();
         document.getElementById('scopusUniqueMetric').textContent = scopusConvertedRows.length.toLocaleString();
         document.getElementById('scopusDuplicateMetric').textContent = (allRows.length - scopusConvertedRows.length).toLocaleString();
+        workflowStats.scopus = {
+          files: files.length,
+          inputRows: allRows.length,
+          uniqueRows: scopusConvertedRows.length,
+          duplicatesRemoved: allRows.length - scopusConvertedRows.length
+        };
         document.getElementById('scopusDownloadTsvBtn').disabled = scopusConvertedRows.length === 0;
         document.getElementById('scopusDownloadCsvBtn').disabled = scopusConvertedRows.length === 0;
         document.getElementById('scopusStatus').textContent = 'Conversion complete.';
         renderScopusPreview();
         renderScopusWarnings(warnings);
+        renderReportingCards();
       } catch (error) {
         document.getElementById('scopusStatus').textContent = error.message;
       } finally {
@@ -1961,6 +2330,7 @@
     function resetWos() {
       wosMergedRows = [];
       wosMergedColumns = [];
+      workflowStats.wos = { files: 0, inputRows: 0, uniqueRows: 0, duplicatesRemoved: 0 };
       clearSelectedFiles('wos');
       document.getElementById('wosFileMetric').textContent = '0';
       document.getElementById('wosTotalMetric').textContent = '0';
@@ -2002,6 +2372,12 @@
         wosMergedRows = dedupeWosRows(allRows).map(normalizeSelectedWosRow);
 
         const duplicateCount = allRows.length - wosMergedRows.length;
+        workflowStats.wos = {
+          files: files.length,
+          inputRows: allRows.length,
+          uniqueRows: wosMergedRows.length,
+          duplicatesRemoved: duplicateCount
+        };
         document.getElementById('wosFileMetric').textContent = files.length.toLocaleString();
         document.getElementById('wosTotalMetric').textContent = allRows.length.toLocaleString();
         document.getElementById('wosUniqueMetric').textContent = wosMergedRows.length.toLocaleString();
@@ -2011,6 +2387,7 @@
         document.getElementById('wosStatus').textContent = 'Merge complete.';
         renderWosPreview();
         renderWosWarnings(warnings);
+        renderReportingCards();
       } catch (error) {
         document.getElementById('wosStatus').textContent = error.message;
       } finally {
@@ -2053,6 +2430,9 @@
     function resetMerge() {
       mergedRows = [];
       mergedColumns = [];
+      workflowStats.merge = { files: 0, inputRows: 0, uniqueRows: 0, duplicatesRemoved: 0, postFilterRemoved: 0, finalRows: 0 };
+      dedupeDetails = emptyDedupeDetails();
+      sourceOverlap = emptySourceOverlap();
       clearSelectedFiles('merge');
       document.getElementById('mergeFileMetric').textContent = '0';
       document.getElementById('mergeTotalMetric').textContent = '0';
@@ -2069,6 +2449,7 @@
       document.getElementById('mergeStatus').textContent = 'No files selected.';
       renderMergePreview();
       renderMergeWarnings([]);
+      renderReportingCards();
     }
 
     async function mergeConvertedFiles() {
@@ -2105,7 +2486,9 @@
         const allRows = parsed.flatMap(item => item.rows);
         const shouldScoreTopicFit = document.getElementById('mergeScoreTopicFit').checked;
         mergedColumns = shouldScoreTopicFit ? [...mergeOutputColumns, topicFitColumn] : [...mergeOutputColumns];
-        mergedRows = dedupeMergeRowsWithSources(allRows);
+        const detailedDedupe = dedupeMergeRowsWithSourcesDetailed(allRows);
+        mergedRows = detailedDedupe.rows;
+        dedupeDetails = detailedDedupe.details;
         const dedupedCount = mergedRows.length;
         if (document.getElementById('mergeRequireArticleDoi').checked) {
           mergedRows = mergedRows.filter(isArticleWithDoi);
@@ -2122,6 +2505,15 @@
         const duplicateCount = allRows.length - dedupedCount;
         const postFilterRemoved = dedupedCount - mergedRows.length;
         const sourceStats = mergeSourceStats(mergedRows);
+        sourceOverlap = calculateSourceOverlap(mergedRows);
+        workflowStats.merge = {
+          files: files.length,
+          inputRows: allRows.length,
+          uniqueRows: dedupedCount,
+          duplicatesRemoved: duplicateCount,
+          postFilterRemoved,
+          finalRows: mergedRows.length
+        };
         const crossPct = sourceStats.total ? Math.round((sourceStats.cross / sourceStats.total) * 1000) / 10 : 0;
         document.getElementById('mergeFileMetric').textContent = files.length.toLocaleString();
         document.getElementById('mergeTotalMetric').textContent = allRows.length.toLocaleString();
@@ -2138,6 +2530,7 @@
           : 'Merge complete.';
         renderMergePreview();
         renderMergeWarnings(warnings);
+        renderReportingCards();
       } catch (error) {
         document.getElementById('mergeStatus').textContent = error.message;
       } finally {
@@ -2366,12 +2759,18 @@ with open('raw_dataset_pickled_PART7', 'wb') as file:
           rows = await resolveCitedReferences(rows);
         }
         downloadedRows = rows;
+        workflowStats.openalex = {
+          downloaded: rawPapers.length,
+          uniqueRows: rows.length,
+          reviewRemoved: removed
+        };
         document.getElementById('uniqueMetric').textContent = rows.length.toLocaleString();
         document.getElementById('reviewMetric').textContent = removed.toLocaleString();
         document.getElementById('csvBtn').disabled = rows.length === 0;
         document.getElementById('wosBtn').disabled = rows.length === 0;
         document.getElementById('jsonBtn').disabled = rows.length === 0;
         renderPreview();
+        renderReportingCards();
         setStatus('Download complete.');
       } catch (error) {
         setStatus(error.message);
@@ -2408,6 +2807,10 @@ with open('raw_dataset_pickled_PART7', 'wb') as file:
     document.getElementById('mergeClearBtn').addEventListener('click', resetMerge);
     document.getElementById('mergeDownloadTsvBtn').addEventListener('click', () => saveTextFile('wos_sources.txt', 'text/tab-separated-values', toDelimited(mergedRows, mergedColumns, '\t'), 'mergeTsvLink', 'mergeExportStatus', 'mergeExportLinks'));
     document.getElementById('mergeDownloadCsvBtn').addEventListener('click', () => saveTextFile('wos_sources.csv', 'text/csv', toDelimited(mergedRows, mergedColumns, ','), 'mergeCsvLink', 'mergeExportStatus', 'mergeExportLinks'));
+    document.getElementById('strategyReportBtn').addEventListener('click', () => saveTextFile('search_strategy_report.md', 'text/markdown', buildSearchStrategyReport(), 'strategyReportLink', 'strategyReportStatus', 'strategyReportLinks'));
+    document.getElementById('flowSummaryBtn').addEventListener('click', () => saveTextFile('prisma_flow_summary.csv', 'text/csv', buildPrismaFlowCsv(), 'flowSummaryLink', 'flowSummaryStatus', 'flowSummaryLinks'));
+    document.getElementById('dedupeReportBtn').addEventListener('click', () => saveTextFile('deduplication_report.csv', 'text/csv', buildDeduplicationCsv(), 'dedupeReportLink', 'dedupeReportStatus', 'dedupeReportLinks'));
+    document.getElementById('sourceOverlapBtn').addEventListener('click', () => saveTextFile('source_overlap_matrix.csv', 'text/csv', buildSourceOverlapCsv(), 'sourceOverlapLink', 'sourceOverlapStatus', 'sourceOverlapLinks'));
     document.getElementById('copyUrlBtn').addEventListener('click', () => navigator.clipboard.writeText(createQueryString()));
     document.getElementById('copyCodeBtn').addEventListener('click', () => navigator.clipboard.writeText(document.getElementById('pythonCode').textContent));
     document.querySelectorAll('[data-file-trigger]').forEach(button => {
@@ -2445,6 +2848,7 @@ with open('raw_dataset_pickled_PART7', 'wb') as file:
     renderSelectedFiles('scopus');
     renderSelectedFiles('merge');
     setupAccessibility();
+    renderReportingCards();
     refreshQuery();
   </script>
 </body>
