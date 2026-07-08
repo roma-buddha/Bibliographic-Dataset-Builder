@@ -460,36 +460,57 @@
       font-size: 13px;
     }
 
-    .file-input {
-      padding: 9px;
+    .upload-picker {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr);
+      align-items: start;
+      gap: 8px;
       border: 1px dashed #9aa8ba;
       border-radius: 8px;
       background: #f8fafc;
-      font-size: 12px;
-      line-height: 1.2;
+      padding: 9px;
     }
 
-    .file-input::file-selector-button {
+    .file-input {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .choose-file-button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
       min-height: 30px;
-      margin-right: 8px;
       border: 1px solid #c6d0dd;
       border-radius: 6px;
       background: #fff;
       color: var(--ink);
       padding: 5px 9px;
-      font: inherit;
+      font-size: 12px;
       font-weight: 650;
+      line-height: 1.2;
       cursor: pointer;
     }
 
-    .file-input::file-selector-button:hover {
+    .choose-file-button:hover {
       border-color: #8ea0b5;
     }
 
     .selected-files {
       display: grid;
       gap: 6px;
-      margin-top: 10px;
+      margin-top: 0;
+      min-width: 0;
+    }
+
+    .selected-files-empty {
+      align-self: center;
+      color: var(--muted);
+      font-size: 12px;
+      padding: 7px 0;
     }
 
     .selected-file {
@@ -564,6 +585,8 @@
       .row, .metrics, .metrics.three, .capability-grid { grid-template-columns: 1fr; }
       .actions { flex-direction: column; }
       button, .link-button { width: 100%; }
+      .upload-picker { grid-template-columns: 1fr; }
+      .choose-file-button { width: 100%; }
       .selected-file .remove-file { width: auto; }
     }
   </style>
@@ -660,9 +683,12 @@
           <h3>Upload</h3>
           <div class="field">
             <label for="wosFiles">Web of Science files</label>
-            <input class="file-input" id="wosFiles" type="file" accept=".txt,.tsv,.csv,text/plain,text/tab-separated-values,text/csv" multiple onchange="addSelectedFiles('wos', this.files)">
+            <div class="upload-picker">
+              <label class="choose-file-button" for="wosFiles">Choose Files</label>
+              <input class="file-input" id="wosFiles" type="file" accept=".txt,.tsv,.csv,text/plain,text/tab-separated-values,text/csv" multiple onchange="addSelectedFiles('wos', this.files)">
+              <div class="selected-files" id="wosFileList"></div>
+            </div>
           </div>
-          <div class="selected-files" id="wosFileList"></div>
           <p class="subtle">Select up to 20 savedrecs-style tab-delimited files. Files stay in this browser session.</p>
           <div class="actions">
             <button class="primary" id="wosMergeBtn" type="button">Merge Files</button>
@@ -677,9 +703,12 @@
           <h3>Upload</h3>
           <div class="field">
             <label for="scopusFiles">Scopus CSV files</label>
-            <input class="file-input" id="scopusFiles" type="file" accept=".csv,text/csv" multiple onchange="addSelectedFiles('scopus', this.files)">
+            <div class="upload-picker">
+              <label class="choose-file-button" for="scopusFiles">Choose Files</label>
+              <input class="file-input" id="scopusFiles" type="file" accept=".csv,text/csv" multiple onchange="addSelectedFiles('scopus', this.files)">
+              <div class="selected-files" id="scopusFileList"></div>
+            </div>
           </div>
-          <div class="selected-files" id="scopusFileList"></div>
           <p class="subtle">Select up to 20 Scopus CSV exports. The converter maps Scopus columns into a Web of Science-style tab-delimited database.</p>
           <div class="actions">
             <button class="primary" id="scopusConvertBtn" type="button">Convert Files</button>
@@ -694,9 +723,12 @@
           <h3>Upload</h3>
           <div class="field">
             <label for="mergeFiles">Converted tab-delimited files</label>
-            <input class="file-input" id="mergeFiles" type="file" accept=".txt,.tsv,.csv,text/plain,text/tab-separated-values,text/csv" multiple onchange="addSelectedFiles('merge', this.files)">
+            <div class="upload-picker">
+              <label class="choose-file-button" for="mergeFiles">Choose Files</label>
+              <input class="file-input" id="mergeFiles" type="file" accept=".txt,.tsv,.csv,text/plain,text/tab-separated-values,text/csv" multiple onchange="addSelectedFiles('merge', this.files)">
+              <div class="selected-files" id="mergeFileList"></div>
+            </div>
           </div>
-          <div class="selected-files" id="mergeFileList"></div>
           <p class="subtle">Select up to 20 WoS-style tab-delimited files produced by OpenAlex, Web of Science, or Scopus sections.</p>
           <label class="toggle">
             <input id="mergeRequireArticleDoi" type="checkbox">
@@ -1017,7 +1049,7 @@
       const wrap = document.getElementById(`${kind}FileList`);
       const files = selectedFiles[kind];
       if (!files.length) {
-        wrap.innerHTML = '';
+        wrap.innerHTML = '<div class="selected-files-empty">No files selected</div>';
         return;
       }
       wrap.innerHTML = files.map((file, index) => `<div class="selected-file">
@@ -2215,6 +2247,9 @@ with open('raw_dataset_pickled_PART7', 'wb') as file:
       removeSelectedFile(button.dataset.fileKind, Number(button.dataset.fileIndex));
     });
 
+    renderSelectedFiles('wos');
+    renderSelectedFiles('scopus');
+    renderSelectedFiles('merge');
     refreshQuery();
   </script>
 </body>
