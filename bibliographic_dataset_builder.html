@@ -2025,29 +2025,86 @@
       return Boolean(doi) && (documentType === 'article' || documentType.includes('article'));
     }
 
+    function escapeRegExp(value) {
+      return String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    }
+
+    function splitTopicAlternatives(value) {
+      const chunks = [];
+      let current = '';
+      let inQuote = false;
+      String(value || '').split('').forEach(char => {
+        if (char === '"') inQuote = !inQuote;
+        if (!inQuote && /[;,]/.test(char)) {
+          chunks.push(current);
+          current = '';
+        } else {
+          current += char;
+        }
+      });
+      chunks.push(current);
+      return chunks.flatMap(chunk => chunk.split(/\bOR\b/i));
+    }
+
+    function normalizeTopicAlternative(value) {
+      const cleaned = String(value || '')
+        .replace(/\b(NOT|AND|OR)\b/gi, ' ')
+        .replace(/[()]/g, ' ')
+        .replace(/^"+|"+$/g, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+      const hasWildcard = /\*/.test(cleaned);
+      const normalized = normalizeLooseText(cleaned.replace(/\*/g, ''));
+      const filler = new Set([
+        'and','or','not','of','in','on','for','to','with','by','from','using','use',
+        'study','studies','analysis','review','effect','effects','impact','role',
+        'approach','method','methods','paper','article','research'
+      ]);
+      if (!normalized || filler.has(normalized)) return null;
+      if (!normalized.includes(' ') && normalized.length < 3) return null;
+      return { text: normalized, wildcard: hasWildcard };
+    }
+
+    function extractTopicConcepts(searchString) {
+      const raw = String(searchString || '').trim();
+      if (!raw) return [];
+      const hasAnd = /\bAND\b/i.test(raw);
+      const groups = hasAnd ? raw.split(/\bAND\b/i) : [raw];
+      return groups
+        .map(group => {
+          const alternatives = splitTopicAlternatives(group)
+            .map(normalizeTopicAlternative)
+            .filter(Boolean);
+          const seen = new Set();
+          return alternatives.filter(item => {
+            const key = `${item.text}:${item.wildcard}`;
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+          });
+        })
+        .filter(group => group.length);
+    }
+
     function extractTopicTerms(searchString) {
-      const terms = [];
-      const quoted = String(searchString || '').match(/"([^"]+)"/g) || [];
-      quoted.forEach(item => terms.push(item.replace(/"/g, '')));
-      const withoutQuoted = String(searchString || '').replace(/"[^"]+"/g, ' ');
-      withoutQuoted
-        .split(/\bAND\b|\bOR\b|[(),]/i)
-        .map(item => item.trim())
-        .filter(Boolean)
-        .forEach(item => terms.push(item));
-      const stop = new Set(['and','or','not']);
-      return [...new Set(terms
-        .map(term => normalizeLooseText(term))
-        .filter(term => term && !stop.has(term) && term.length > 1))];
+      return [...new Set(extractTopicConcepts(searchString).flat().map(item => item.text))];
+    }
+
+    function topicAlternativeMatches(haystack, item) {
+      if (!item || !item.text) return false;
+      if (item.wildcard && !item.text.includes(' ')) {
+        return new RegExp(`\\b${escapeRegExp(item.text)}[a-z0-9]*\\b`).test(haystack);
+      }
+      return new RegExp(`\\b${escapeRegExp(item.text)}\\b`).test(haystack);
     }
 
     function scoreTopicFit(row, searchString) {
-      const terms = extractTopicTerms(searchString);
-      if (!terms.length) return '0%';
+      const concepts = extractTopicConcepts(searchString);
+      if (!concepts.length) return '0%';
       const haystack = normalizeLooseText([row.TI, row.AB, row.DE, row.ID].filter(Boolean).join(' '));
       if (!haystack) return '0%';
-      const matched = terms.filter(term => haystack.includes(term)).length;
-      const ratio = matched / terms.length;
+      const matched = concepts.filter(group => group.some(item => topicAlternativeMatches(haystack, item))).length;
+      const ratio = matched / concepts.length;
       if (ratio >= 0.75) return '100%';
       if (ratio >= 0.5) return '75%';
       if (ratio >= 0.25) return '50%';
