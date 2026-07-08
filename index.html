@@ -909,6 +909,7 @@
     const mergeSourceColumn = 'SOURCE';
     const topicFitColumn = 'TOPIC_FIT';
     const mergeOutputColumns = [...wosCanonicalColumns, mergeSourceColumn];
+    const openAlexConfigFile = 'openalex_config.json';
 
     const fields = {
       keywords: document.getElementById('keywords'),
@@ -926,6 +927,23 @@
     };
 
     fields.keywords.value = '';
+    loadLocalOpenAlexConfig();
+
+    async function loadLocalOpenAlexConfig() {
+      try {
+        const response = await fetch(openAlexConfigFile, { cache: 'no-store' });
+        if (!response.ok) return;
+        const config = await response.json();
+        const key = String(config.openalex_api_key || config.api_key || '').trim();
+        if (!key || fields.openAlexApiKey.value.trim()) return;
+        fields.openAlexApiKey.value = key;
+        fields.openAlexApiKey.dataset.loaded = 'local';
+        setStatus('OpenAlex API key loaded from local config.');
+        refreshQuery();
+      } catch {
+        // Local config is optional, especially on GitHub Pages.
+      }
+    }
 
     function listFromInput(value) {
       return value.split(',').map(item => item.trim()).filter(Boolean);
