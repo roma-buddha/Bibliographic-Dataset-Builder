@@ -393,6 +393,38 @@
       margin-bottom: 16px;
     }
 
+    details.card summary {
+      cursor: pointer;
+      list-style: none;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    details.card summary::-webkit-details-marker {
+      display: none;
+    }
+
+    details.card summary h2 {
+      margin: 0;
+    }
+
+    details.card summary::after {
+      content: '-';
+      color: var(--blue);
+      font-weight: 800;
+    }
+
+    details.card:not([open]) summary {
+      margin-bottom: 0;
+    }
+
+    details.card:not([open]) summary::after {
+      content: '+';
+    }
+
     .urlbox, pre {
       width: 100%;
       overflow: auto;
@@ -1144,19 +1176,19 @@
           </div>
         </div>
 
-        <div class="card">
-          <h2>Top Keywords</h2>
+        <details class="card" open>
+          <summary><h2>Top Keywords</h2></summary>
           <div id="analysisKeywordsWrap">
             <p class="subtle">Run analysis to see frequent terms in the merged database.</p>
           </div>
-        </div>
+        </details>
 
-        <div class="card">
-          <h2>Cluster Summary</h2>
+        <details class="card" open>
+          <summary><h2>Cluster Summary</h2></summary>
           <div id="analysisSummaryWrap">
             <p class="subtle">Run analysis to create cluster summaries.</p>
           </div>
-        </div>
+        </details>
 
         <div class="card">
           <h2>Paper Preview</h2>
