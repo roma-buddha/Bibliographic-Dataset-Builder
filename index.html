@@ -1135,6 +1135,8 @@
             <button id="analysisKeywordsBtn" type="button" disabled>Download Keywords</button>
           </div>
           <div class="status" id="analysisExportStatus"></div>
+          <div class="progress"><div class="bar" id="analysisProgressBar"></div></div>
+          <div class="status" id="analysisProgressText">No analysis running.</div>
           <div class="actions fallback-links" id="analysisExportLinks" hidden>
             <a class="link-button" id="analysisTsvLink" download="wos_sources_clustered.txt">Fallback Clustered TSV</a>
             <a class="link-button" id="analysisSummaryLink" download="cluster_summary.csv">Fallback Cluster Summary</a>
@@ -2338,6 +2340,12 @@
         : '<p class="subtle">Run analysis to preview clustered papers.</p>';
     }
 
+    function updateAnalysisProgress(percent, text) {
+      const pct = Math.max(0, Math.min(100, Number(percent) || 0));
+      document.getElementById('analysisProgressBar').style.width = `${pct}%`;
+      document.getElementById('analysisProgressText').textContent = text;
+    }
+
     function resetAnalysis() {
       analysisRows = [];
       analysisSummary = [];
@@ -2348,6 +2356,7 @@
         : (mergedRows.length ? 'Ready to analyze merged rows.' : 'Upload files here or run final Merge first.');
       document.getElementById('analysisExportStatus').textContent = '';
       document.getElementById('analysisExportLinks').hidden = true;
+      updateAnalysisProgress(0, 'No analysis running.');
       renderAnalysisDashboard();
     }
 
@@ -2387,6 +2396,7 @@
       const minFrequency = Math.max(1, Number(document.getElementById('analysisMinTermFrequency').value) || 2);
       document.getElementById('analysisRunBtn').disabled = true;
       document.getElementById('analysisStatus').textContent = 'Preparing analysis data.';
+      updateAnalysisProgress(5, 'Preparing analysis data.');
       try {
         const input = await getAnalysisInputRows();
         if (!input.rows.length) {
@@ -2395,10 +2405,12 @@
           keywordFrequencies = [];
           analysisColumns = [];
           document.getElementById('analysisStatus').textContent = 'Upload analysis files or run final Merge before analysis.';
+          updateAnalysisProgress(0, 'No analysis input available.');
           renderAnalysisDashboard();
           return;
         }
         document.getElementById('analysisStatus').textContent = 'Building TF-IDF clusters.';
+        updateAnalysisProgress(25, `Vectorizing ${input.rows.length.toLocaleString()} papers.`);
         const { vocabulary, vectors } = buildTfIdfMatrix(input.rows, { minFrequency });
         const usableCount = vectors.filter(Boolean).length;
         if (!usableCount || !vocabulary.length) {
@@ -2406,10 +2418,13 @@
           analysisSummary = [];
           analysisColumns = [...input.columns, ...clusterColumns];
           document.getElementById('analysisStatus').textContent = 'No analyzable text or repeated terms found.';
+          updateAnalysisProgress(100, 'Analysis finished with no analyzable clusters.');
           renderAnalysisDashboard();
           return;
         }
+        updateAnalysisProgress(55, `Clustering ${usableCount.toLocaleString()} analyzable papers.`);
         const { assignments, clusters } = runKMeans(vectors, Math.min(requestedK, usableCount));
+        updateAnalysisProgress(75, 'Labeling clusters.');
         const clusterTerms = Array.from({ length: clusters }, (_, clusterIndex) => topTermsForCluster(input.rows, vectors, assignments, clusterIndex, vocabulary));
         analysisRows = input.rows.map((row, index) => {
           const assignment = assignments[index];
@@ -2422,14 +2437,17 @@
             CLUSTER_TERMS: terms.join('; ')
           };
         });
+        updateAnalysisProgress(90, 'Summarizing cluster results.');
         analysisSummary = summarizeClusters(analysisRows);
         analysisColumns = [...input.columns, ...clusterColumns];
         const warningText = input.warnings.length ? ` ${input.warnings.length.toLocaleString()} parsing warning${input.warnings.length === 1 ? '' : 's'}.` : '';
         const sourceText = input.source === 'upload' ? `${(input.inputRows || input.rows.length).toLocaleString()} uploaded rows, ` : '';
         document.getElementById('analysisStatus').textContent = `Analysis complete: ${sourceText}${usableCount.toLocaleString()} papers clustered.${warningText}`;
+        updateAnalysisProgress(100, `Analysis complete: ${usableCount.toLocaleString()} papers clustered.`);
         renderAnalysisDashboard();
       } catch (error) {
         document.getElementById('analysisStatus').textContent = error.message;
+        updateAnalysisProgress(0, 'Analysis stopped.');
       } finally {
         document.getElementById('analysisRunBtn').disabled = false;
       }
