@@ -411,7 +411,21 @@
       margin: 0;
     }
 
-    details.card summary::after {
+    .collapse-toggle {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      min-height: 24px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      color: var(--blue);
+      background: #eef5ff;
+      padding: 3px 8px;
+      font-size: 12px;
+      font-weight: 760;
+    }
+
+    .collapse-toggle::before {
       content: '-';
       color: var(--blue);
       font-weight: 800;
@@ -421,8 +435,13 @@
       margin-bottom: 0;
     }
 
-    details.card:not([open]) summary::after {
+    details.card:not([open]) .collapse-toggle::before {
       content: '+';
+    }
+
+    details.card:not([open]) .collapse-toggle .collapse-open,
+    details.card[open] .collapse-toggle .collapse-closed {
+      display: none;
     }
 
     .urlbox, pre {
@@ -1177,14 +1196,14 @@
         </div>
 
         <details class="card" open>
-          <summary><h2>Top Keywords</h2></summary>
+          <summary><h2>Top Keywords</h2><span class="collapse-toggle"><span class="collapse-open">Hide</span><span class="collapse-closed">Show</span></span></summary>
           <div id="analysisKeywordsWrap">
             <p class="subtle">Run analysis to see frequent terms in the merged database.</p>
           </div>
         </details>
 
         <details class="card" open>
-          <summary><h2>Cluster Summary</h2></summary>
+          <summary><h2>Cluster Summary</h2><span class="collapse-toggle"><span class="collapse-open">Hide</span><span class="collapse-closed">Show</span></span></summary>
           <div id="analysisSummaryWrap">
             <p class="subtle">Run analysis to create cluster summaries.</p>
           </div>
