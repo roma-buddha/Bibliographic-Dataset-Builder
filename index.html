@@ -2126,10 +2126,15 @@
       return [row.TI, row.AB, row.DE, row.ID].filter(Boolean).join(' ');
     }
 
-    const analysisStopwords = new Set([
-      'about','above','after','again','against','also','among','because','been','before','being','between','both','but','can','could','did','does','doing','during','each','few','for','from','had','has','have','having','her','here','hers','him','his','how','into','its','itself','may','more','most','not','our','ours','out','over','own','same','she','should','such','than','that','their','theirs','them','then','there','these','they','this','those','through','too','under','until','very','was','were','what','when','where','which','while','who','whom','why','will','with','within','would','you','your',
-      'article','articles','based','case','data','effect','effects','findings','method','methods','model','models','paper','papers','research','result','results','review','study','studies','using'
-    ]);
+    const englishStopwords = [
+      'about','above','after','again','against','all','also','although','always','among','and','another','any','are','around','because','been','before','being','below','between','both','but','can','cannot','could','did','does','doing','done','during','each','either','else','few','for','from','had','has','have','having','her','here','hers','him','his','how','into','its','itself','just','may','might','more','most','must','nor','not','now','off','only','our','ours','out','over','own','same','she','should','since','such','than','that','their','theirs','them','then','there','these','they','this','those','through','too','under','until','very','was','were','what','when','where','whether','which','while','who','whom','why','will','with','within','without','would','you','your'
+    ];
+
+    const bibliographicStopwords = [
+      'article','articles','based','case','cases','data','dataset','datasets','effect','effects','finding','findings','method','methods','model','models','paper','papers','research','result','results','review','study','studies','using'
+    ];
+
+    const analysisStopwords = new Set([...englishStopwords, ...bibliographicStopwords]);
 
     function tokenizeAnalysisText(text) {
       return normalizeLooseText(text)
