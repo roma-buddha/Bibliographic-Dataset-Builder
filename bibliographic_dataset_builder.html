@@ -820,10 +820,10 @@
           <div class="status" id="analysisProgressText">No analysis running.</div>
         </div>
         <div class="section">
-          <h3>Light Clustering</h3>
+          <h3>Light Topic Grouping</h3>
           <div class="row">
             <div class="field">
-              <label for="analysisClusterCount">Clusters</label>
+              <label for="analysisClusterCount">Target topic groups</label>
               <input id="analysisClusterCount" type="number" min="2" max="30" value="8">
             </div>
             <div class="field">
@@ -864,7 +864,7 @@
             </div>
             <div class="capability-card">
               <h3>Light Analysis</h3>
-              <p class="subtle">Cluster the final merged database in the browser with TF-IDF, summarize clusters, inspect top keywords, and export clustered files.</p>
+              <p class="subtle">Group the final merged database in the browser with TF-IDF, summarize topic groups, inspect top keywords, and export grouped files.</p>
             </div>
           </div>
         </div>
@@ -1123,14 +1123,14 @@
       <section class="app-panel" id="analysisApp">
         <div class="metrics">
           <div class="metric"><div class="value" id="analysisPaperMetric">0</div><div class="label">Papers analyzed</div></div>
-          <div class="metric"><div class="value" id="analysisClusterMetric">0</div><div class="label">Clusters</div></div>
+          <div class="metric"><div class="value" id="analysisClusterMetric">0</div><div class="label">Topic groups</div></div>
           <div class="metric"><div class="value" id="analysisLargestMetric">0</div><div class="label">Largest cluster</div></div>
           <div class="metric"><div class="value" id="analysisEmptyMetric">0</div><div class="label">Empty text rows</div></div>
         </div>
 
         <div class="card">
-          <h2>Lightweight Topic Clusters</h2>
-          <p class="subtle">Run browser-only TF-IDF clustering on the final merged database using titles, abstracts, author keywords, and database keywords.</p>
+          <h2>Lightweight Topic Groups</h2>
+          <p class="subtle">Run browser-only TF-IDF grouping on the final merged database using titles, abstracts, author keywords, and database keywords.</p>
           <div class="actions">
             <button id="analysisDownloadTsvBtn" type="button" disabled>Download Clustered TSV</button>
             <button id="analysisSummaryBtn" type="button" disabled>Download Cluster Summary</button>
@@ -2414,7 +2414,7 @@
           renderAnalysisDashboard();
           return;
         }
-        document.getElementById('analysisStatus').textContent = 'Building TF-IDF clusters.';
+        document.getElementById('analysisStatus').textContent = 'Building TF-IDF topic groups.';
         updateAnalysisProgress(25, `Vectorizing ${input.rows.length.toLocaleString()} papers.`);
         const { vocabulary, vectors } = buildTfIdfMatrix(input.rows, { minFrequency });
         const usableCount = vectors.filter(Boolean).length;
@@ -2423,13 +2423,13 @@
           analysisSummary = [];
           analysisColumns = [...input.columns, ...clusterColumns];
           document.getElementById('analysisStatus').textContent = 'No analyzable text or repeated terms found.';
-          updateAnalysisProgress(100, 'Analysis finished with no analyzable clusters.');
+          updateAnalysisProgress(100, 'Analysis finished with no analyzable topic groups.');
           renderAnalysisDashboard();
           return;
         }
-        updateAnalysisProgress(55, `Clustering ${usableCount.toLocaleString()} analyzable papers.`);
+        updateAnalysisProgress(55, `Grouping ${usableCount.toLocaleString()} analyzable papers.`);
         const { assignments, clusters } = runKMeans(vectors, Math.min(requestedK, usableCount));
-        updateAnalysisProgress(75, 'Labeling clusters.');
+        updateAnalysisProgress(75, 'Labeling topic groups.');
         const clusterTerms = Array.from({ length: clusters }, (_, clusterIndex) => topTermsForCluster(input.rows, vectors, assignments, clusterIndex, vocabulary));
         analysisRows = input.rows.map((row, index) => {
           const assignment = assignments[index];
