@@ -444,6 +444,30 @@
       display: none;
     }
 
+    .chart-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .mini-chart {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+      padding: 12px;
+      min-width: 0;
+    }
+
+    .mini-chart h3 {
+      margin-bottom: 8px;
+    }
+
+    .mini-chart svg {
+      width: 100%;
+      height: auto;
+      display: block;
+    }
+
     .urlbox, pre {
       width: 100%;
       overflow: auto;
@@ -672,6 +696,7 @@
       }
       .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .metrics.three { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .chart-grid { grid-template-columns: 1fr; }
       .capability-grid { grid-template-columns: 1fr; }
     }
 
@@ -1209,12 +1234,19 @@
           </div>
         </details>
 
-        <div class="card">
-          <h2>Paper Preview</h2>
+        <details class="card" open>
+          <summary><h2>Graphs</h2><span class="collapse-toggle"><span class="collapse-open">Hide</span><span class="collapse-closed">Show</span></span></summary>
+          <div id="analysisChartsWrap">
+            <p class="subtle">Run analysis to create lightweight browser graphs.</p>
+          </div>
+        </details>
+
+        <details class="card" open>
+          <summary><h2>Paper Preview</h2><span class="collapse-toggle"><span class="collapse-open">Hide</span><span class="collapse-closed">Show</span></span></summary>
           <div id="analysisTableWrap">
             <p class="subtle">Run analysis to preview clustered papers.</p>
           </div>
-        </div>
+        </details>
       </section>
     </main>
   </div>
@@ -2378,6 +2410,181 @@
       }).sort((a, b) => Number(a.clusterId) - Number(b.clusterId));
     }
 
+    function barSvg(items, options = {}) {
+      const width = options.width || 520;
+      const rowHeight = 24;
+      const left = options.left || 140;
+      const right = options.right || 72;
+      const height = Math.max(72, items.length * rowHeight + 18);
+      const max = Math.max(1, ...items.map(item => item.value));
+      const labelLimit = options.labelLimit || 18;
+      const bars = items.map((item, index) => {
+        const y = 12 + index * rowHeight;
+        const barWidth = Math.round(((width - left - right) * item.value) / max);
+        const label = String(item.label || '');
+        const shortLabel = label.length > labelLimit ? `${label.slice(0, labelLimit - 1)}…` : label;
+        const value = numberText(item.value);
+        const valueOutsideX = left + barWidth + 6;
+        const valueInside = valueOutsideX + 38 > width;
+        const valueX = valueInside ? left + Math.max(8, barWidth - 6) : valueOutsideX;
+        const valueAnchor = valueInside ? 'end' : 'start';
+        const valueColor = valueInside && barWidth > 42 ? '#fff' : '#475467';
+        return `<text x="0" y="${y + 14}" font-size="11" fill="#475467">${escapeHtml(shortLabel)}<title>${escapeHtml(label)}</title></text>
+          <rect x="${left}" y="${y}" width="${barWidth}" height="14" rx="3" fill="${options.color || '#2563eb'}"></rect>
+          <text x="${valueX}" y="${y + 12}" text-anchor="${valueAnchor}" font-size="11" fill="${valueColor}">${value}</text>`;
+      }).join('');
+      return `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="${escapeHtml(options.label || 'Bar chart')}">${bars}</svg>`;
+    }
+
+    function lineSvg(items, options = {}) {
+      const width = 420;
+      const height = 170;
+      if (!items.length) return `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="${escapeHtml(options.label || 'Line chart')}"></svg>`;
+      const left = 34;
+      const top = 18;
+      const chartWidth = width - 52;
+      const chartHeight = height - 48;
+      const max = Math.max(1, ...items.map(item => item.value));
+      const step = items.length > 1 ? chartWidth / (items.length - 1) : chartWidth;
+      const points = items.map((item, index) => {
+        const x = left + (items.length > 1 ? index * step : chartWidth / 2);
+        const y = top + chartHeight - (item.value / max) * chartHeight;
+        return { ...item, x, y };
+      });
+      const polyline = points.map(point => `${point.x},${point.y}`).join(' ');
+      const circles = points.map(point => `<circle cx="${point.x}" cy="${point.y}" r="3" fill="#2563eb"><title>${escapeHtml(point.label)}: ${numberText(point.value)}</title></circle>`).join('');
+      const labels = points.filter((_, index) => index === 0 || index === points.length - 1 || items.length <= 8).map(point => `<text x="${point.x}" y="${height - 12}" text-anchor="middle" font-size="10" fill="#667085">${escapeHtml(point.label)}</text>`).join('');
+      return `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="${escapeHtml(options.label || 'Line chart')}">
+        <line x1="${left}" y1="${top + chartHeight}" x2="${left + chartWidth}" y2="${top + chartHeight}" stroke="#d7dde5"></line>
+        <line x1="${left}" y1="${top}" x2="${left}" y2="${top + chartHeight}" stroke="#d7dde5"></line>
+        <polyline points="${polyline}" fill="none" stroke="#2563eb" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"></polyline>
+        ${circles}
+        ${labels}
+      </svg>`;
+    }
+
+    function splitMultiValue(value) {
+      return String(value || '')
+        .split(/;|\||,/)
+        .map(item => item.trim())
+        .filter(Boolean);
+    }
+
+    function topFieldItems(rows, field, limit = 10) {
+      const counts = new Map();
+      rows.forEach(row => {
+        splitMultiValue(row[field]).forEach(value => {
+          counts.set(value, (counts.get(value) || 0) + 1);
+        });
+      });
+      return Array.from(counts.entries())
+        .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+        .slice(0, limit)
+        .map(([label, value]) => ({ label, value }));
+    }
+
+    function topicTimelineSvg(rows) {
+      const width = 640;
+      const height = 260;
+      const years = [...new Set(rows.map(row => String(row.PY || '').trim()).filter(year => /^\d{4}$/.test(year)))]
+        .sort((a, b) => Number(a) - Number(b));
+      const groups = [...new Set(rows.map(row => row.CLUSTER_ID).filter(Boolean))]
+        .sort((a, b) => Number(a) - Number(b));
+      if (!years.length || !groups.length) {
+        return `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Topic group timeline"></svg>`;
+      }
+      const colors = ['#2563eb', '#16805d', '#b7791f', '#bd3b3b', '#7c3aed', '#0891b2', '#be185d', '#4b5563'];
+      const left = 42;
+      const top = 18;
+      const chartWidth = width - 70;
+      const chartHeight = height - 62;
+      const totalsByYear = new Map(years.map(year => [year, 0]));
+      const counts = new Map();
+      rows.forEach(row => {
+        const year = String(row.PY || '').trim();
+        const group = row.CLUSTER_ID;
+        if (!/^\d{4}$/.test(year) || !group) return;
+        totalsByYear.set(year, (totalsByYear.get(year) || 0) + 1);
+        const key = `${year}|${group}`;
+        counts.set(key, (counts.get(key) || 0) + 1);
+      });
+      const maxTotal = Math.max(1, ...Array.from(totalsByYear.values()));
+      const step = chartWidth / years.length;
+      const barWidth = Math.max(8, Math.min(24, step * 0.72));
+      const bars = years.map((year, yearIndex) => {
+        const x = left + yearIndex * step + (step - barWidth) / 2;
+        let yBottom = top + chartHeight;
+        return groups.map((group, groupIndex) => {
+          const value = counts.get(`${year}|${group}`) || 0;
+          if (!value) return '';
+          const segmentHeight = (value / maxTotal) * chartHeight;
+          yBottom -= segmentHeight;
+          return `<rect x="${x}" y="${yBottom}" width="${barWidth}" height="${segmentHeight}" fill="${colors[groupIndex % colors.length]}"><title>${year}, Group ${group}: ${numberText(value)}</title></rect>`;
+        }).join('');
+      }).join('');
+      const yearLabels = years.filter((_, index) => index === 0 || index === years.length - 1 || years.length <= 10).map((year, index, filtered) => {
+        const originalIndex = years.indexOf(year);
+        const x = left + originalIndex * step + step / 2;
+        return `<text x="${x}" y="${height - 18}" text-anchor="middle" font-size="10" fill="#667085">${escapeHtml(year)}</text>`;
+      }).join('');
+      const legend = groups.slice(0, 8).map((group, index) => {
+        const x = left + index * 66;
+        return `<rect x="${x}" y="${height - 44}" width="9" height="9" fill="${colors[index % colors.length]}"></rect><text x="${x + 13}" y="${height - 36}" font-size="10" fill="#667085">G${escapeHtml(group)}</text>`;
+      }).join('');
+      return `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Topic group timeline">
+        <line x1="${left}" y1="${top + chartHeight}" x2="${left + chartWidth}" y2="${top + chartHeight}" stroke="#d7dde5"></line>
+        <line x1="${left}" y1="${top}" x2="${left}" y2="${top + chartHeight}" stroke="#d7dde5"></line>
+        ${bars}
+        ${yearLabels}
+        ${legend}
+      </svg>`;
+    }
+
+    function renderAnalysisCharts() {
+      const wrap = document.getElementById('analysisChartsWrap');
+      if (!analysisRows.length) {
+        wrap.innerHTML = '<p class="subtle">Run analysis to create lightweight browser graphs.</p>';
+        return;
+      }
+      const clusterItems = analysisSummary.map(row => ({
+        label: `Group ${row.clusterId}`,
+        value: row.papers
+      }));
+      const yearCounts = new Map();
+      analysisRows.forEach(row => {
+        const year = String(row.PY || '').trim();
+        if (/^\d{4}$/.test(year)) yearCounts.set(year, (yearCounts.get(year) || 0) + 1);
+      });
+      const yearItems = Array.from(yearCounts.entries())
+        .sort((a, b) => Number(a[0]) - Number(b[0]))
+        .map(([label, value]) => ({ label, value }));
+      const sourceCounts = new Map();
+      analysisRows.forEach(row => {
+        const sources = sourceList(row.SOURCE || row[mergeSourceColumn]);
+        (sources.length ? sources : ['Unknown']).forEach(source => sourceCounts.set(source, (sourceCounts.get(source) || 0) + 1));
+      });
+      const sourceItems = Array.from(sourceCounts.entries())
+        .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+        .map(([label, value]) => ({ label, value }));
+      const citationItems = analysisSummary.map(row => ({
+        label: `Group ${row.clusterId}`,
+        value: row.citations
+      }));
+      const journalItems = topFieldItems(analysisRows, 'SO', 10);
+      const categoryItems = topFieldItems(analysisRows, 'WC', 10);
+      const keywordItems = topFieldItems(analysisRows, 'DE', 10);
+      wrap.innerHTML = `<div class="chart-grid">
+        <div class="mini-chart"><h3>Topic Group Sizes</h3>${barSvg(clusterItems, { label: 'Topic group sizes', color: '#2563eb' })}</div>
+        <div class="mini-chart"><h3>Publication Years</h3>${lineSvg(yearItems, { label: 'Publication years' })}</div>
+        <div class="mini-chart"><h3>Source Mix</h3>${barSvg(sourceItems, { label: 'Source mix', color: '#16805d' })}</div>
+        <div class="mini-chart"><h3>Citations By Group</h3>${barSvg(citationItems, { label: 'Citations by topic group', color: '#b7791f' })}</div>
+        <div class="mini-chart"><h3>Top Journals</h3>${barSvg(journalItems, { label: 'Top journals', color: '#0891b2', left: 190, labelLimit: 28 })}</div>
+        <div class="mini-chart"><h3>Top WoS Categories</h3>${barSvg(categoryItems, { label: 'Top WoS categories', color: '#7c3aed', left: 160, labelLimit: 24 })}</div>
+        <div class="mini-chart"><h3>Top Author Keywords</h3>${barSvg(keywordItems, { label: 'Top author keywords', color: '#be185d', left: 170, labelLimit: 25 })}</div>
+        <div class="mini-chart"><h3>Topic Group Timeline</h3>${topicTimelineSvg(analysisRows)}</div>
+      </div>`;
+    }
+
     function renderAnalysisDashboard() {
       const hasRows = analysisRows.length > 0;
       document.getElementById('analysisPaperMetric').textContent = hasRows ? analysisRows.filter(row => row.CLUSTER_ID).length.toLocaleString() : '0';
@@ -2397,6 +2604,7 @@
       summaryWrap.innerHTML = analysisSummary.length
         ? `<table><thead><tr><th>Cluster</th><th>Suggested label</th><th>Papers</th><th>Mean year</th><th>Citations</th><th>Top journals</th><th>Most cited paper</th></tr></thead><tbody>${analysisSummary.map(row => `<tr><td>${escapeHtml(row.clusterId)}</td><td>${escapeHtml(row.label)}</td><td>${numberText(row.papers)}</td><td>${escapeHtml(row.meanYear)}</td><td>${numberText(row.citations)}</td><td>${escapeHtml(row.topJournals)}</td><td>${escapeHtml(row.mostCitedTitle)}</td></tr>`).join('')}</tbody></table>`
         : '<p class="subtle">Run analysis to create cluster summaries.</p>';
+      renderAnalysisCharts();
 
       const tableWrap = document.getElementById('analysisTableWrap');
       tableWrap.innerHTML = hasRows
