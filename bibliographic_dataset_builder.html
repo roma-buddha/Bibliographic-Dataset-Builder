@@ -806,6 +806,18 @@
 
       <div class="source-controls" id="analysisControls">
         <div class="section">
+          <h3>Upload</h3>
+          <div class="field">
+            <label for="analysisFiles">WoS-style files</label>
+            <div class="upload-picker" data-upload-kind="analysis">
+              <button class="choose-file-button" type="button" data-file-trigger="analysisFiles">Choose Files</button>
+              <input class="file-input" id="analysisFiles" type="file" accept=".txt,.tsv,.csv,text/plain,text/tab-separated-values,text/csv" multiple onchange="addSelectedFiles('analysis', this.files)">
+              <div class="selected-files" id="analysisFileList"></div>
+            </div>
+          </div>
+          <p class="subtle">Upload converted WoS-style tab-delimited files directly, or leave this empty to analyze the latest final Merge output.</p>
+        </div>
+        <div class="section">
           <h3>Light Clustering</h3>
           <div class="row">
             <div class="field">
@@ -1180,7 +1192,8 @@
     const selectedFiles = {
       wos: [],
       scopus: [],
-      merge: []
+      merge: [],
+      analysis: []
     };
     const wosCanonicalColumns = ['UT','PY','TI','AB','AU','Z9','C1','DT','DE','ID','CR','DI','SO','WC','RP','J9','VL','BP','LA','IS','EP'];
     const mergeSourceColumn = 'SOURCE';
@@ -1372,6 +1385,7 @@
       selectedFiles[kind].splice(index, 1);
       renderSelectedFiles(kind);
       setUploadStatus(kind, selectedFiles[kind].length ? `${selectedFiles[kind].length.toLocaleString()} file${selectedFiles[kind].length === 1 ? '' : 's'} selected.` : 'No files selected.');
+      if (kind === 'analysis') resetAnalysis();
     }
 
     function clearSelectedFiles(kind) {
@@ -2329,36 +2343,75 @@
       analysisSummary = [];
       keywordFrequencies = [];
       analysisColumns = [];
-      document.getElementById('analysisStatus').textContent = mergedRows.length ? 'Ready to analyze merged rows.' : 'Run final Merge first.';
+      document.getElementById('analysisStatus').textContent = selectedFiles.analysis.length
+        ? `${selectedFiles.analysis.length.toLocaleString()} analysis file${selectedFiles.analysis.length === 1 ? '' : 's'} selected.`
+        : (mergedRows.length ? 'Ready to analyze merged rows.' : 'Upload files here or run final Merge first.');
       document.getElementById('analysisExportStatus').textContent = '';
       document.getElementById('analysisExportLinks').hidden = true;
       renderAnalysisDashboard();
     }
 
-    function runAnalysis() {
-      if (!mergedRows.length) {
-        document.getElementById('analysisStatus').textContent = 'Run final Merge before analysis.';
-        resetAnalysis();
-        return;
+    async function getAnalysisInputRows() {
+      const files = syncSelectedFilesFromInput('analysis');
+      if (!files.length) {
+        return {
+          rows: mergedRows,
+          columns: mergedColumns.length ? mergedColumns : mergeOutputColumns,
+          warnings: [],
+          source: 'merged'
+        };
       }
+      if (files.length > 20) throw new Error('Select 20 analysis files or fewer.');
+      const parsed = [];
+      const warnings = [];
+      for (const file of files) {
+        const text = await file.text();
+        const fileSource = inferSourceFromFileName(file.name);
+        const parsedFile = parseWosText(text, file.name);
+        parsedFile.rows = parsedFile.rows.map(row => ({
+          ...row,
+          [mergeSourceColumn]: inferSourceFromRow(row, fileSource)
+        }));
+        warnings.push(...parsedFile.warnings);
+        parsed.push(parsedFile);
+      }
+      const allRows = parsed.flatMap(item => item.rows);
+      const detailedDedupe = dedupeMergeRowsWithSourcesDetailed(allRows);
+      const columns = mergeWosColumns(parsed.map(item => item.columns));
+      const outputColumns = columns.includes(mergeSourceColumn) ? columns : [...columns, mergeSourceColumn];
+      return { rows: detailedDedupe.rows, columns: outputColumns, warnings, source: 'upload', inputRows: allRows.length };
+    }
+
+    async function runAnalysis() {
       const requestedK = Math.max(2, Math.min(30, Number(document.getElementById('analysisClusterCount').value) || 8));
       const minFrequency = Math.max(1, Number(document.getElementById('analysisMinTermFrequency').value) || 2);
       document.getElementById('analysisRunBtn').disabled = true;
-      document.getElementById('analysisStatus').textContent = 'Building TF-IDF clusters.';
+      document.getElementById('analysisStatus').textContent = 'Preparing analysis data.';
       try {
-        const { vocabulary, vectors } = buildTfIdfMatrix(mergedRows, { minFrequency });
+        const input = await getAnalysisInputRows();
+        if (!input.rows.length) {
+          analysisRows = [];
+          analysisSummary = [];
+          keywordFrequencies = [];
+          analysisColumns = [];
+          document.getElementById('analysisStatus').textContent = 'Upload analysis files or run final Merge before analysis.';
+          renderAnalysisDashboard();
+          return;
+        }
+        document.getElementById('analysisStatus').textContent = 'Building TF-IDF clusters.';
+        const { vocabulary, vectors } = buildTfIdfMatrix(input.rows, { minFrequency });
         const usableCount = vectors.filter(Boolean).length;
         if (!usableCount || !vocabulary.length) {
-          analysisRows = mergedRows.map(row => ({ ...row, CLUSTER_ID: '', CLUSTER_LABEL: '', CLUSTER_TERMS: '' }));
+          analysisRows = input.rows.map(row => ({ ...row, CLUSTER_ID: '', CLUSTER_LABEL: '', CLUSTER_TERMS: '' }));
           analysisSummary = [];
-          analysisColumns = [...(mergedColumns.length ? mergedColumns : mergeOutputColumns), ...clusterColumns];
+          analysisColumns = [...input.columns, ...clusterColumns];
           document.getElementById('analysisStatus').textContent = 'No analyzable text or repeated terms found.';
           renderAnalysisDashboard();
           return;
         }
         const { assignments, clusters } = runKMeans(vectors, Math.min(requestedK, usableCount));
-        const clusterTerms = Array.from({ length: clusters }, (_, clusterIndex) => topTermsForCluster(mergedRows, vectors, assignments, clusterIndex, vocabulary));
-        analysisRows = mergedRows.map((row, index) => {
+        const clusterTerms = Array.from({ length: clusters }, (_, clusterIndex) => topTermsForCluster(input.rows, vectors, assignments, clusterIndex, vocabulary));
+        analysisRows = input.rows.map((row, index) => {
           const assignment = assignments[index];
           const terms = assignment >= 0 ? clusterTerms[assignment] : [];
           const clusterId = assignment >= 0 ? String(assignment + 1) : '';
@@ -2370,8 +2423,10 @@
           };
         });
         analysisSummary = summarizeClusters(analysisRows);
-        analysisColumns = [...(mergedColumns.length ? mergedColumns : mergeOutputColumns), ...clusterColumns];
-        document.getElementById('analysisStatus').textContent = `Analysis complete: ${usableCount.toLocaleString()} papers clustered.`;
+        analysisColumns = [...input.columns, ...clusterColumns];
+        const warningText = input.warnings.length ? ` ${input.warnings.length.toLocaleString()} parsing warning${input.warnings.length === 1 ? '' : 's'}.` : '';
+        const sourceText = input.source === 'upload' ? `${(input.inputRows || input.rows.length).toLocaleString()} uploaded rows, ` : '';
+        document.getElementById('analysisStatus').textContent = `Analysis complete: ${sourceText}${usableCount.toLocaleString()} papers clustered.${warningText}`;
         renderAnalysisDashboard();
       } catch (error) {
         document.getElementById('analysisStatus').textContent = error.message;
@@ -3262,6 +3317,7 @@ with open('raw_dataset_pickled_PART7', 'wb') as file:
     document.getElementById('wosFiles').addEventListener('change', event => addSelectedFiles('wos', event.target.files));
     document.getElementById('scopusFiles').addEventListener('change', event => addSelectedFiles('scopus', event.target.files));
     document.getElementById('mergeFiles').addEventListener('change', event => addSelectedFiles('merge', event.target.files));
+    document.getElementById('analysisFiles').addEventListener('change', event => addSelectedFiles('analysis', event.target.files));
     document.querySelectorAll('[data-upload-kind]').forEach(zone => {
       ['dragenter', 'dragover'].forEach(type => {
         zone.addEventListener(type, event => {
@@ -3290,6 +3346,7 @@ with open('raw_dataset_pickled_PART7', 'wb') as file:
     renderSelectedFiles('wos');
     renderSelectedFiles('scopus');
     renderSelectedFiles('merge');
+    renderSelectedFiles('analysis');
     setupAccessibility();
     renderReportingCards();
     resetAnalysis();
