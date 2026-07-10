@@ -656,6 +656,7 @@
         <button class="app-tab" data-app-tab="wosApp" data-controls="wosControls" type="button">Web of Science</button>
         <button class="app-tab" data-app-tab="scopusApp" data-controls="scopusControls" type="button">Scopus</button>
         <button class="app-tab" data-app-tab="mergeApp" data-controls="mergeControls" type="button">Merge</button>
+        <button class="app-tab" data-app-tab="analysisApp" data-controls="analysisControls" type="button">Analysis</button>
       </div>
 
       <div class="source-controls" id="openalexControls">
@@ -802,6 +803,27 @@
           <div class="status" id="mergeStatus">No files selected.</div>
         </div>
       </div>
+
+      <div class="source-controls" id="analysisControls">
+        <div class="section">
+          <h3>Light Clustering</h3>
+          <div class="row">
+            <div class="field">
+              <label for="analysisClusterCount">Clusters</label>
+              <input id="analysisClusterCount" type="number" min="2" max="30" value="8">
+            </div>
+            <div class="field">
+              <label for="analysisMinTermFrequency">Min term freq</label>
+              <input id="analysisMinTermFrequency" type="number" min="1" max="50" value="2">
+            </div>
+          </div>
+          <div class="actions">
+            <button class="primary" id="analysisRunBtn" type="button">Run Analysis</button>
+            <button id="analysisClearBtn" type="button">Clear</button>
+          </div>
+          <div class="status" id="analysisStatus">Run final Merge first.</div>
+        </div>
+      </div>
     </aside>
 
     <main>
@@ -825,6 +847,10 @@
             <div class="capability-card">
               <h3>Cross-Source Merge</h3>
               <p class="subtle">Merge converted tab-delimited outputs from multiple sections, deduplicate across sources, preview results, and export a final database.</p>
+            </div>
+            <div class="capability-card">
+              <h3>Light Analysis</h3>
+              <p class="subtle">Cluster the final merged database in the browser with TF-IDF, summarize clusters, inspect top keywords, and export clustered files.</p>
             </div>
           </div>
         </div>
@@ -1079,6 +1105,52 @@
           </div>
         </div>
       </section>
+
+      <section class="app-panel" id="analysisApp">
+        <div class="metrics">
+          <div class="metric"><div class="value" id="analysisPaperMetric">0</div><div class="label">Papers analyzed</div></div>
+          <div class="metric"><div class="value" id="analysisClusterMetric">0</div><div class="label">Clusters</div></div>
+          <div class="metric"><div class="value" id="analysisLargestMetric">0</div><div class="label">Largest cluster</div></div>
+          <div class="metric"><div class="value" id="analysisEmptyMetric">0</div><div class="label">Empty text rows</div></div>
+        </div>
+
+        <div class="card">
+          <h2>Lightweight Topic Clusters</h2>
+          <p class="subtle">Run browser-only TF-IDF clustering on the final merged database using titles, abstracts, author keywords, and database keywords.</p>
+          <div class="actions">
+            <button id="analysisDownloadTsvBtn" type="button" disabled>Download Clustered TSV</button>
+            <button id="analysisSummaryBtn" type="button" disabled>Download Cluster Summary</button>
+            <button id="analysisKeywordsBtn" type="button" disabled>Download Keywords</button>
+          </div>
+          <div class="status" id="analysisExportStatus"></div>
+          <div class="actions fallback-links" id="analysisExportLinks" hidden>
+            <a class="link-button" id="analysisTsvLink" download="wos_sources_clustered.txt">Fallback Clustered TSV</a>
+            <a class="link-button" id="analysisSummaryLink" download="cluster_summary.csv">Fallback Cluster Summary</a>
+            <a class="link-button" id="analysisKeywordsLink" download="keyword_frequencies.csv">Fallback Keywords</a>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>Top Keywords</h2>
+          <div id="analysisKeywordsWrap">
+            <p class="subtle">Run analysis to see frequent terms in the merged database.</p>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>Cluster Summary</h2>
+          <div id="analysisSummaryWrap">
+            <p class="subtle">Run analysis to create cluster summaries.</p>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>Paper Preview</h2>
+          <div id="analysisTableWrap">
+            <p class="subtle">Run analysis to preview clustered papers.</p>
+          </div>
+        </div>
+      </section>
     </main>
   </div>
 
@@ -1092,6 +1164,10 @@
     let scopusConvertedColumns = [];
     let mergedRows = [];
     let mergedColumns = [];
+    let analysisRows = [];
+    let analysisSummary = [];
+    let keywordFrequencies = [];
+    let analysisColumns = [];
     const sourceNames = ['OpenAlex', 'Web of Science', 'Scopus'];
     let workflowStats = {
       openalex: { downloaded: 0, uniqueRows: 0, reviewRemoved: 0 },
@@ -1109,6 +1185,7 @@
     const wosCanonicalColumns = ['UT','PY','TI','AB','AU','Z9','C1','DT','DE','ID','CR','DI','SO','WC','RP','J9','VL','BP','LA','IS','EP'];
     const mergeSourceColumn = 'SOURCE';
     const topicFitColumn = 'TOPIC_FIT';
+    const clusterColumns = ['CLUSTER_ID', 'CLUSTER_LABEL', 'CLUSTER_TERMS'];
     const mergeOutputColumns = [...wosCanonicalColumns, mergeSourceColumn];
     const openAlexConfigFile = 'openalex_config.json';
 
@@ -2029,6 +2106,298 @@
       return rows.map(csvLine).join('\n');
     }
 
+    function analysisText(row) {
+      return [row.TI, row.AB, row.DE, row.ID].filter(Boolean).join(' ');
+    }
+
+    const analysisStopwords = new Set([
+      'about','above','after','again','against','also','among','because','been','before','being','between','both','but','can','could','did','does','doing','during','each','few','for','from','had','has','have','having','her','here','hers','him','his','how','into','its','itself','may','more','most','not','our','ours','out','over','own','same','she','should','such','than','that','their','theirs','them','then','there','these','they','this','those','through','too','under','until','very','was','were','what','when','where','which','while','who','whom','why','will','with','within','would','you','your',
+      'article','articles','based','case','data','effect','effects','findings','method','methods','model','models','paper','papers','research','result','results','review','study','studies','using'
+    ]);
+
+    function tokenizeAnalysisText(text) {
+      return normalizeLooseText(text)
+        .split(/\s+/)
+        .filter(term => term.length >= 3 && !analysisStopwords.has(term) && !/^\d+$/.test(term));
+    }
+
+    function buildTfIdfMatrix(rows, options = {}) {
+      const minFrequency = Math.max(1, Number(options.minFrequency) || 2);
+      const documents = rows.map((row, index) => ({
+        index,
+        tokens: tokenizeAnalysisText(analysisText(row))
+      }));
+      const termCounts = new Map();
+      const docFreq = new Map();
+      documents.forEach(doc => {
+        const seen = new Set();
+        doc.tokens.forEach(term => {
+          termCounts.set(term, (termCounts.get(term) || 0) + 1);
+          seen.add(term);
+        });
+        seen.forEach(term => docFreq.set(term, (docFreq.get(term) || 0) + 1));
+      });
+      keywordFrequencies = Array.from(termCounts.entries())
+        .map(([term, count]) => ({ term, count }))
+        .sort((a, b) => b.count - a.count || a.term.localeCompare(b.term));
+      const vocabulary = keywordFrequencies
+        .filter(item => item.count >= minFrequency)
+        .slice(0, 1500)
+        .map(item => item.term);
+      const termIndex = new Map(vocabulary.map((term, index) => [term, index]));
+      const usableDocs = [];
+      const vectors = documents.map(doc => {
+        const tf = new Map();
+        doc.tokens.forEach(term => {
+          if (termIndex.has(term)) tf.set(term, (tf.get(term) || 0) + 1);
+        });
+        if (!tf.size) return null;
+        const vector = {};
+        let norm = 0;
+        tf.forEach((count, term) => {
+          const idf = Math.log((1 + rows.length) / (1 + (docFreq.get(term) || 0))) + 1;
+          const value = (count / doc.tokens.length) * idf;
+          const index = termIndex.get(term);
+          vector[index] = value;
+          norm += value * value;
+        });
+        const length = Math.sqrt(norm) || 1;
+        Object.keys(vector).forEach(key => vector[key] = vector[key] / length);
+        usableDocs.push(doc.index);
+        return vector;
+      });
+      return { vocabulary, vectors, usableDocs };
+    }
+
+    function dotSparse(a, b) {
+      if (!a || !b) return 0;
+      const aKeys = Object.keys(a);
+      const bKeys = Object.keys(b);
+      const useA = aKeys.length <= bKeys.length;
+      const keys = useA ? aKeys : bKeys;
+      const other = useA ? b : a;
+      return keys.reduce((sum, key) => sum + (a[key] || 0) * (other[key] || 0), 0);
+    }
+
+    function normalizeSparse(vector) {
+      let norm = 0;
+      Object.values(vector).forEach(value => norm += value * value);
+      const length = Math.sqrt(norm) || 1;
+      const normalized = {};
+      Object.entries(vector).forEach(([key, value]) => normalized[key] = value / length);
+      return normalized;
+    }
+
+    function runKMeans(vectors, k) {
+      const indexed = vectors.map((vector, index) => ({ vector, index })).filter(item => item.vector);
+      if (!indexed.length) return { assignments: Array(vectors.length).fill(-1), clusters: 0 };
+      const clusterCount = Math.max(1, Math.min(k, indexed.length));
+      const centroids = [];
+      const first = indexed
+        .slice()
+        .sort((a, b) => Object.keys(b.vector).length - Object.keys(a.vector).length || a.index - b.index)[0];
+      centroids.push({ ...first.vector });
+      while (centroids.length < clusterCount) {
+        let next = null;
+        let nextScore = -Infinity;
+        indexed.forEach(item => {
+          const nearest = Math.max(...centroids.map(centroid => dotSparse(item.vector, centroid)));
+          const score = 1 - nearest;
+          if (score > nextScore) {
+            nextScore = score;
+            next = item;
+          }
+        });
+        centroids.push({ ...next.vector });
+      }
+
+      const assignments = Array(vectors.length).fill(-1);
+      for (let iteration = 0; iteration < 25; iteration += 1) {
+        let changed = false;
+        indexed.forEach(item => {
+          let bestCluster = 0;
+          let bestScore = -Infinity;
+          centroids.forEach((centroid, clusterIndex) => {
+            const score = dotSparse(item.vector, centroid);
+            if (score > bestScore) {
+              bestScore = score;
+              bestCluster = clusterIndex;
+            }
+          });
+          if (assignments[item.index] !== bestCluster) {
+            assignments[item.index] = bestCluster;
+            changed = true;
+          }
+        });
+        if (!changed && iteration > 0) break;
+        const sums = Array.from({ length: clusterCount }, () => ({}));
+        const counts = Array(clusterCount).fill(0);
+        indexed.forEach(item => {
+          const cluster = assignments[item.index];
+          counts[cluster] += 1;
+          Object.entries(item.vector).forEach(([key, value]) => {
+            sums[cluster][key] = (sums[cluster][key] || 0) + value;
+          });
+        });
+        sums.forEach((sum, clusterIndex) => {
+          if (!counts[clusterIndex]) return;
+          Object.keys(sum).forEach(key => sum[key] = sum[key] / counts[clusterIndex]);
+          centroids[clusterIndex] = normalizeSparse(sum);
+        });
+      }
+      return { assignments, clusters: clusterCount };
+    }
+
+    function topTermsForCluster(rows, vectors, assignments, clusterIndex, vocabulary, limit = 6) {
+      const scores = new Map();
+      rows.forEach((row, rowIndex) => {
+        if (assignments[rowIndex] !== clusterIndex || !vectors[rowIndex]) return;
+        Object.entries(vectors[rowIndex]).forEach(([termIndex, value]) => {
+          const term = vocabulary[Number(termIndex)];
+          scores.set(term, (scores.get(term) || 0) + value);
+        });
+      });
+      return Array.from(scores.entries())
+        .map(([term, score]) => ({ term, score }))
+        .sort((a, b) => b.score - a.score || a.term.localeCompare(b.term))
+        .slice(0, limit)
+        .map(item => item.term);
+    }
+
+    function summarizeClusters(rows) {
+      const grouped = new Map();
+      rows.forEach(row => {
+        if (!row.CLUSTER_ID) return;
+        if (!grouped.has(row.CLUSTER_ID)) grouped.set(row.CLUSTER_ID, []);
+        grouped.get(row.CLUSTER_ID).push(row);
+      });
+      return Array.from(grouped.entries()).map(([clusterId, group]) => {
+        const years = group.map(row => Number(row.PY)).filter(year => Number.isFinite(year));
+        const citations = group.reduce((sum, row) => sum + (Number(row.Z9) || 0), 0);
+        const journals = new Map();
+        group.forEach(row => {
+          const journal = String(row.SO || '').trim();
+          if (journal) journals.set(journal, (journals.get(journal) || 0) + 1);
+        });
+        const topJournals = Array.from(journals.entries())
+          .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+          .slice(0, 3)
+          .map(([journal]) => journal)
+          .join('; ');
+        const mostCited = group.slice().sort((a, b) => (Number(b.Z9) || 0) - (Number(a.Z9) || 0))[0] || {};
+        return {
+          clusterId,
+          label: group[0].CLUSTER_LABEL || clusterId,
+          terms: group[0].CLUSTER_TERMS || '',
+          papers: group.length,
+          meanYear: years.length ? Math.round(years.reduce((sum, year) => sum + year, 0) / years.length) : '',
+          citations,
+          topJournals,
+          mostCitedTitle: mostCited.TI || ''
+        };
+      }).sort((a, b) => Number(a.clusterId) - Number(b.clusterId));
+    }
+
+    function renderAnalysisDashboard() {
+      const hasRows = analysisRows.length > 0;
+      document.getElementById('analysisPaperMetric').textContent = hasRows ? analysisRows.filter(row => row.CLUSTER_ID).length.toLocaleString() : '0';
+      document.getElementById('analysisClusterMetric').textContent = hasRows ? analysisSummary.length.toLocaleString() : '0';
+      document.getElementById('analysisLargestMetric').textContent = hasRows ? Math.max(0, ...analysisSummary.map(row => row.papers)).toLocaleString() : '0';
+      document.getElementById('analysisEmptyMetric').textContent = hasRows ? analysisRows.filter(row => !row.CLUSTER_ID).length.toLocaleString() : '0';
+      document.getElementById('analysisDownloadTsvBtn').disabled = !hasRows;
+      document.getElementById('analysisSummaryBtn').disabled = !hasRows;
+      document.getElementById('analysisKeywordsBtn').disabled = !keywordFrequencies.length;
+
+      const keywordWrap = document.getElementById('analysisKeywordsWrap');
+      keywordWrap.innerHTML = keywordFrequencies.length
+        ? `<table><thead><tr><th>Keyword</th><th>Frequency</th></tr></thead><tbody>${keywordFrequencies.slice(0, 20).map(item => `<tr><td>${escapeHtml(item.term)}</td><td>${numberText(item.count)}</td></tr>`).join('')}</tbody></table>`
+        : '<p class="subtle">Run analysis to see frequent terms in the merged database.</p>';
+
+      const summaryWrap = document.getElementById('analysisSummaryWrap');
+      summaryWrap.innerHTML = analysisSummary.length
+        ? `<table><thead><tr><th>Cluster</th><th>Suggested label</th><th>Papers</th><th>Mean year</th><th>Citations</th><th>Top journals</th><th>Most cited paper</th></tr></thead><tbody>${analysisSummary.map(row => `<tr><td>${escapeHtml(row.clusterId)}</td><td>${escapeHtml(row.label)}</td><td>${numberText(row.papers)}</td><td>${escapeHtml(row.meanYear)}</td><td>${numberText(row.citations)}</td><td>${escapeHtml(row.topJournals)}</td><td>${escapeHtml(row.mostCitedTitle)}</td></tr>`).join('')}</tbody></table>`
+        : '<p class="subtle">Run analysis to create cluster summaries.</p>';
+
+      const tableWrap = document.getElementById('analysisTableWrap');
+      tableWrap.innerHTML = hasRows
+        ? `<table><thead><tr><th>Cluster</th><th>Title</th><th>Year</th><th>Authors</th><th>Journal</th><th>DOI</th><th>Source</th><th>Top terms</th></tr></thead><tbody>${analysisRows.slice(0, 15).map(row => `<tr><td>${escapeHtml(row.CLUSTER_ID || '')}</td><td>${escapeHtml(row.TI || '')}</td><td>${escapeHtml(row.PY || '')}</td><td>${escapeHtml(row.AU || '')}</td><td>${escapeHtml(row.SO || '')}</td><td>${escapeHtml(row.DI || '')}</td><td>${escapeHtml(row.SOURCE || '')}</td><td>${escapeHtml(row.CLUSTER_TERMS || '')}</td></tr>`).join('')}</tbody></table>`
+        : '<p class="subtle">Run analysis to preview clustered papers.</p>';
+    }
+
+    function resetAnalysis() {
+      analysisRows = [];
+      analysisSummary = [];
+      keywordFrequencies = [];
+      analysisColumns = [];
+      document.getElementById('analysisStatus').textContent = mergedRows.length ? 'Ready to analyze merged rows.' : 'Run final Merge first.';
+      document.getElementById('analysisExportStatus').textContent = '';
+      document.getElementById('analysisExportLinks').hidden = true;
+      renderAnalysisDashboard();
+    }
+
+    function runAnalysis() {
+      if (!mergedRows.length) {
+        document.getElementById('analysisStatus').textContent = 'Run final Merge before analysis.';
+        resetAnalysis();
+        return;
+      }
+      const requestedK = Math.max(2, Math.min(30, Number(document.getElementById('analysisClusterCount').value) || 8));
+      const minFrequency = Math.max(1, Number(document.getElementById('analysisMinTermFrequency').value) || 2);
+      document.getElementById('analysisRunBtn').disabled = true;
+      document.getElementById('analysisStatus').textContent = 'Building TF-IDF clusters.';
+      try {
+        const { vocabulary, vectors } = buildTfIdfMatrix(mergedRows, { minFrequency });
+        const usableCount = vectors.filter(Boolean).length;
+        if (!usableCount || !vocabulary.length) {
+          analysisRows = mergedRows.map(row => ({ ...row, CLUSTER_ID: '', CLUSTER_LABEL: '', CLUSTER_TERMS: '' }));
+          analysisSummary = [];
+          analysisColumns = [...(mergedColumns.length ? mergedColumns : mergeOutputColumns), ...clusterColumns];
+          document.getElementById('analysisStatus').textContent = 'No analyzable text or repeated terms found.';
+          renderAnalysisDashboard();
+          return;
+        }
+        const { assignments, clusters } = runKMeans(vectors, Math.min(requestedK, usableCount));
+        const clusterTerms = Array.from({ length: clusters }, (_, clusterIndex) => topTermsForCluster(mergedRows, vectors, assignments, clusterIndex, vocabulary));
+        analysisRows = mergedRows.map((row, index) => {
+          const assignment = assignments[index];
+          const terms = assignment >= 0 ? clusterTerms[assignment] : [];
+          const clusterId = assignment >= 0 ? String(assignment + 1) : '';
+          return {
+            ...row,
+            CLUSTER_ID: clusterId,
+            CLUSTER_LABEL: terms.slice(0, 3).join('; ') || (clusterId ? `Cluster ${clusterId}` : ''),
+            CLUSTER_TERMS: terms.join('; ')
+          };
+        });
+        analysisSummary = summarizeClusters(analysisRows);
+        analysisColumns = [...(mergedColumns.length ? mergedColumns : mergeOutputColumns), ...clusterColumns];
+        document.getElementById('analysisStatus').textContent = `Analysis complete: ${usableCount.toLocaleString()} papers clustered.`;
+        renderAnalysisDashboard();
+      } catch (error) {
+        document.getElementById('analysisStatus').textContent = error.message;
+      } finally {
+        document.getElementById('analysisRunBtn').disabled = false;
+      }
+    }
+
+    function buildClusteredTsv() {
+      return toDelimited(analysisRows, analysisColumns, '\t');
+    }
+
+    function buildClusterSummaryCsv() {
+      const rows = [['cluster_id', 'cluster_label', 'cluster_terms', 'papers', 'mean_year', 'total_citations', 'top_journals', 'most_cited_title']];
+      analysisSummary.forEach(row => {
+        rows.push([row.clusterId, row.label, row.terms, row.papers, row.meanYear, row.citations, row.topJournals, row.mostCitedTitle]);
+      });
+      return rows.map(csvLine).join('\n');
+    }
+
+    function buildKeywordFrequencyCsv() {
+      const rows = [['keyword', 'frequency']];
+      keywordFrequencies.forEach(item => rows.push([item.term, item.count]));
+      return rows.map(csvLine).join('\n');
+    }
+
     function isArticleWithDoi(row) {
       const doi = normalizeWosDoi(row.DI || row.DL);
       const documentType = normalizeLooseText(row.DT);
@@ -2517,6 +2886,7 @@
       renderMergePreview();
       renderMergeWarnings([]);
       renderReportingCards();
+      resetAnalysis();
     }
 
     async function mergeConvertedFiles() {
@@ -2595,6 +2965,7 @@
         document.getElementById('mergeStatus').textContent = postFilterRemoved
           ? `Merge complete. Filter removed ${postFilterRemoved.toLocaleString()} non-article or no-DOI rows.`
           : 'Merge complete.';
+        resetAnalysis();
         renderMergePreview();
         renderMergeWarnings(warnings);
         renderReportingCards();
@@ -2874,6 +3245,11 @@ with open('raw_dataset_pickled_PART7', 'wb') as file:
     document.getElementById('mergeClearBtn').addEventListener('click', resetMerge);
     document.getElementById('mergeDownloadTsvBtn').addEventListener('click', () => saveTextFile('wos_sources.txt', 'text/tab-separated-values', toDelimited(mergedRows, mergedColumns, '\t'), 'mergeTsvLink', 'mergeExportStatus', 'mergeExportLinks'));
     document.getElementById('mergeDownloadCsvBtn').addEventListener('click', () => saveTextFile('wos_sources.csv', 'text/csv', toDelimited(mergedRows, mergedColumns, ','), 'mergeCsvLink', 'mergeExportStatus', 'mergeExportLinks'));
+    document.getElementById('analysisRunBtn').addEventListener('click', runAnalysis);
+    document.getElementById('analysisClearBtn').addEventListener('click', resetAnalysis);
+    document.getElementById('analysisDownloadTsvBtn').addEventListener('click', () => saveTextFile('wos_sources_clustered.txt', 'text/tab-separated-values', buildClusteredTsv(), 'analysisTsvLink', 'analysisExportStatus', 'analysisExportLinks'));
+    document.getElementById('analysisSummaryBtn').addEventListener('click', () => saveTextFile('cluster_summary.csv', 'text/csv', buildClusterSummaryCsv(), 'analysisSummaryLink', 'analysisExportStatus', 'analysisExportLinks'));
+    document.getElementById('analysisKeywordsBtn').addEventListener('click', () => saveTextFile('keyword_frequencies.csv', 'text/csv', buildKeywordFrequencyCsv(), 'analysisKeywordsLink', 'analysisExportStatus', 'analysisExportLinks'));
     document.getElementById('strategyReportBtn').addEventListener('click', () => saveTextFile('search_strategy_report.md', 'text/markdown', buildSearchStrategyReport(), 'strategyReportLink', 'strategyReportStatus', 'strategyReportLinks'));
     document.getElementById('flowSummaryBtn').addEventListener('click', () => saveTextFile('prisma_flow_summary.csv', 'text/csv', buildPrismaFlowCsv(), 'flowSummaryLink', 'flowSummaryStatus', 'flowSummaryLinks'));
     document.getElementById('dedupeReportBtn').addEventListener('click', () => saveTextFile('deduplication_report.csv', 'text/csv', buildDeduplicationCsv(), 'dedupeReportLink', 'dedupeReportStatus', 'dedupeReportLinks'));
@@ -2916,6 +3292,7 @@ with open('raw_dataset_pickled_PART7', 'wb') as file:
     renderSelectedFiles('merge');
     setupAccessibility();
     renderReportingCards();
+    resetAnalysis();
     refreshQuery();
   </script>
 </body>
