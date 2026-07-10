@@ -816,6 +816,8 @@
             </div>
           </div>
           <p class="subtle">Upload converted WoS-style tab-delimited files directly, or leave this empty to analyze the latest final Merge output.</p>
+          <div class="progress"><div class="bar" id="analysisProgressBar"></div></div>
+          <div class="status" id="analysisProgressText">No analysis running.</div>
         </div>
         <div class="section">
           <h3>Light Clustering</h3>
@@ -1135,8 +1137,6 @@
             <button id="analysisKeywordsBtn" type="button" disabled>Download Keywords</button>
           </div>
           <div class="status" id="analysisExportStatus"></div>
-          <div class="progress"><div class="bar" id="analysisProgressBar"></div></div>
-          <div class="status" id="analysisProgressText">No analysis running.</div>
           <div class="actions fallback-links" id="analysisExportLinks" hidden>
             <a class="link-button" id="analysisTsvLink" download="wos_sources_clustered.txt">Fallback Clustered TSV</a>
             <a class="link-button" id="analysisSummaryLink" download="cluster_summary.csv">Fallback Cluster Summary</a>
