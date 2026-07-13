@@ -1353,6 +1353,11 @@
       return Number(value || 0).toLocaleString();
     }
 
+    function percentText(value, denominator) {
+      const pct = denominator ? (Number(value || 0) / denominator) * 100 : 0;
+      return `${Math.round(pct * 10) / 10}%`;
+    }
+
     function csvLine(values) {
       return values.map(csvEscape).join(',');
     }
@@ -2093,13 +2098,30 @@
         wrap.innerHTML = '<p class="subtle">Run final merge to calculate source overlap.</p>';
         return;
       }
-      wrap.innerHTML = `<p class="subtle">Single-source only: OpenAlex ${numberText(sourceOverlap.singles.OpenAlex)}, WoS ${numberText(sourceOverlap.singles['Web of Science'])}, Scopus ${numberText(sourceOverlap.singles.Scopus)}. Three-way overlap: ${numberText(sourceOverlap.triple)}.</p>
+      const pairRows = [
+        ['OpenAlex + Web of Science', sourceOverlap.pairs.openalexWos],
+        ['OpenAlex + Scopus', sourceOverlap.pairs.openalexScopus],
+        ['Web of Science + Scopus', sourceOverlap.pairs.wosScopus],
+        ['All three sources', sourceOverlap.triple]
+      ];
+      wrap.innerHTML = `<p class="subtle">Percentages are calculated from the final deduplicated merged database (${numberText(sourceOverlap.total)} unique papers).</p>
       <table>
-        <thead><tr><th>Source</th>${sourceNames.map(source => `<th>${escapeHtml(source)}</th>`).join('')}</tr></thead>
+        <thead><tr><th>Source overlap</th>${sourceNames.map(source => `<th>${escapeHtml(source)}</th>`).join('')}</tr></thead>
         <tbody>${sourceNames.map(rowSource => `<tr>
           <th>${escapeHtml(rowSource)}</th>
-          ${sourceNames.map(columnSource => `<td>${numberText(sourceOverlap.matrix[rowSource][columnSource])}</td>`).join('')}
+          ${sourceNames.map(columnSource => {
+            const count = sourceOverlap.matrix[rowSource][columnSource];
+            return `<td>${numberText(count)} <span class="subtle">(${percentText(count, sourceOverlap.total)})</span></td>`;
+          }).join('')}
         </tr>`).join('')}</tbody>
+      </table>
+      <table>
+        <thead><tr><th>Overlap group</th><th>Papers</th><th>Final merge share</th></tr></thead>
+        <tbody>${pairRows.map(([label, count]) => `<tr><td>${escapeHtml(label)}</td><td>${numberText(count)}</td><td>${percentText(count, sourceOverlap.total)}</td></tr>`).join('')}
+          <tr><td>OpenAlex only</td><td>${numberText(sourceOverlap.singles.OpenAlex)}</td><td>${percentText(sourceOverlap.singles.OpenAlex, sourceOverlap.total)}</td></tr>
+          <tr><td>Web of Science only</td><td>${numberText(sourceOverlap.singles['Web of Science'])}</td><td>${percentText(sourceOverlap.singles['Web of Science'], sourceOverlap.total)}</td></tr>
+          <tr><td>Scopus only</td><td>${numberText(sourceOverlap.singles.Scopus)}</td><td>${percentText(sourceOverlap.singles.Scopus, sourceOverlap.total)}</td></tr>
+        </tbody>
       </table>`;
     }
 
@@ -2194,6 +2216,11 @@
         rows.push([rowSource, ...sourceNames.map(columnSource => sourceOverlap.matrix[rowSource][columnSource])]);
       });
       rows.push([]);
+      rows.push(['percentage_of_final_merge', ...sourceNames]);
+      sourceNames.forEach(rowSource => {
+        rows.push([rowSource, ...sourceNames.map(columnSource => percentText(sourceOverlap.matrix[rowSource][columnSource], sourceOverlap.total))]);
+      });
+      rows.push([]);
       rows.push(['summary', 'count']);
       rows.push(['openalex_only', sourceOverlap.singles.OpenAlex]);
       rows.push(['wos_only', sourceOverlap.singles['Web of Science']]);
@@ -2202,6 +2229,15 @@
       rows.push(['openalex_scopus_overlap', sourceOverlap.pairs.openalexScopus]);
       rows.push(['wos_scopus_overlap', sourceOverlap.pairs.wosScopus]);
       rows.push(['three_way_overlap', sourceOverlap.triple]);
+      rows.push([]);
+      rows.push(['summary_percentage', 'final_merge_share']);
+      rows.push(['openalex_only', percentText(sourceOverlap.singles.OpenAlex, sourceOverlap.total)]);
+      rows.push(['wos_only', percentText(sourceOverlap.singles['Web of Science'], sourceOverlap.total)]);
+      rows.push(['scopus_only', percentText(sourceOverlap.singles.Scopus, sourceOverlap.total)]);
+      rows.push(['openalex_wos_overlap', percentText(sourceOverlap.pairs.openalexWos, sourceOverlap.total)]);
+      rows.push(['openalex_scopus_overlap', percentText(sourceOverlap.pairs.openalexScopus, sourceOverlap.total)]);
+      rows.push(['wos_scopus_overlap', percentText(sourceOverlap.pairs.wosScopus, sourceOverlap.total)]);
+      rows.push(['three_way_overlap', percentText(sourceOverlap.triple, sourceOverlap.total)]);
       return rows.map(csvLine).join('\n');
     }
 
