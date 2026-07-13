@@ -2106,12 +2106,15 @@
       ];
       wrap.innerHTML = `<p class="subtle">Percentages are calculated from the final deduplicated merged database (${numberText(sourceOverlap.total)} unique papers).</p>
       <table>
-        <thead><tr><th>Source overlap</th>${sourceNames.map(source => `<th>${escapeHtml(source)}</th>`).join('')}</tr></thead>
+        <thead>
+          <tr><th rowspan="2">Source overlap</th>${sourceNames.map(source => `<th colspan="2">${escapeHtml(source)}</th>`).join('')}</tr>
+          <tr>${sourceNames.map(() => '<th>Papers</th><th>%</th>').join('')}</tr>
+        </thead>
         <tbody>${sourceNames.map(rowSource => `<tr>
           <th>${escapeHtml(rowSource)}</th>
           ${sourceNames.map(columnSource => {
             const count = sourceOverlap.matrix[rowSource][columnSource];
-            return `<td>${numberText(count)} <span class="subtle">(${percentText(count, sourceOverlap.total)})</span></td>`;
+            return `<td>${numberText(count)}</td><td>${percentText(count, sourceOverlap.total)}</td>`;
           }).join('')}
         </tr>`).join('')}</tbody>
       </table>
